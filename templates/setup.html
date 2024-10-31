@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Настройка игры</title>
+    <!-- Подключение Bootstrap -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+    <!-- Дополнительные стили -->
+    <style>
+        .container {
+            max-width: 600px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Настройка игры</h1>
+        <form method="post">
+            <div class="form-group">
+                <label for="num_teams">Количество команд:</label>
+                <input type="number" class="form-control" id="num_teams" name="num_teams" min="1" max="10" value="3" required>
+            </div>
+            <div id="team-names"></div>
+            <button type="submit" class="btn btn-primary">Начать игру</button>
+        </form>
+    </div>
+
+    <!-- Скрипт для динамического добавления полей ввода названий команд -->
+    <script>
+        const numTeamsInput = document.getElementById('num_teams');
+        const teamNamesDiv = document.getElementById('team-names');
+
+        function updateTeamNames() {
+            const numTeams = parseInt(numTeamsInput.value);
+            teamNamesDiv.innerHTML = '';
+            for (let i = 1; i <= numTeams; i++) {
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                const label = document.createElement('label');
+                label.innerText = `Название команды ${i}:`;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control';
+                input.name = `team_${i}_name`;
+                input.placeholder = `Команда ${i}`;
+                div.appendChild(label);
+                div.appendChild(input);
+                teamNamesDiv.appendChild(div);
+            }
+        }
+
+        numTeamsInput.addEventListener('input', updateTeamNames);
+
+        // Инициализация полей при загрузке страницы
+        updateTeamNames();
+    </script>
+</body>
+</html>

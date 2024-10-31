@@ -1,24 +1,30 @@
-from flask import Flask, render_template_string, request, redirect, url_for, send_file
+from flask import Flask, render_template, request, redirect, url_for, send_file, session
 import random
 import json
 import os
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Замените на безопасный ключ в продакшене
 
 STATE_FILE = 'game_state.json'
 
+# Определение жанров (легко изменить)
+genres = ['Eurovision', 'Хип-хоп', 'Поп', 'Рок']  # 4 жанра
+
+points = [100, 200, 300, 400, 500]  # Очки остаются прежними
+
 # Инициализация состояния игры
 def init_game_state():
-    global teams, categories, points, board, current_team
-    teams = [{'name': f'Команда {i+1}', 'score': 0, 'random_uses': 3} for i in range(3)]
-    categories = ['Рэп', 'Хип-хоп', 'Поп', 'Рок', 'Джаз']
-    points = [100, 200, 300, 400, 500]
-    board = {(cat, pt): {'state': 'unused'} for cat in categories for pt in points}
-    current_team = 0
+    global teams, categories, board, current_team
 
-    # Если файл состояния существует, загружаем состояние из него
+    # Загрузка состояния из файла, если он существует
     if os.path.exists(STATE_FILE):
         load_game_state()
+    else:
+        teams = []  # Будут инициализированы после настройки
+        categories = genres  # Используем переменную genres
+        board = {(cat, pt): {'state': 'unused'} for cat in categories for pt in points}
+        current_team = 0
 
 # Сохранение состояния игры в файл
 def save_game_state():
@@ -41,134 +47,6 @@ def load_game_state():
 
 init_game_state()
 
-template = '''
-<!doctype html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Музыкальная игра</title>
-    <style>
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #000; text-align: center; padding: 10px; }
-        .unused { background-color: lightgreen; }
-        .selected { background-color: yellow; }
-        .used { background-color: white; }
-        .current { font-weight: bold; }
-        a { text-decoration: none; color: black; display: block; width: 100%; height: 100%; }
-        button { margin: 5px; padding: 10px; }
-        .top-right {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-    </style>
-</head>
-<body>
-    <div class="top-right">
-        <a href="{{ url_for('download_game_state') }}" target="_blank">Сохранить игру</a>
-    </div>
-    <h1>Музыкальная игра</h1>
-    <h2>Ход команды: {{ teams[current_team]['name'] }}</h2>
-    <form method="post" action="{{ url_for('use_random') }}">
-        {% if teams[current_team]['random_uses'] > 0 %}
-            <button type="submit">Рандом (осталось {{ teams[current_team]['random_uses'] }})</button>
-        {% else %}
-            <button type="submit" disabled>Рандом недоступен</button>
-        {% endif %}
-    </form>
-    <table>
-        <tr>
-            <th>Категория\\Очки</th>
-            {% for pt in points %}
-                <th>{{ pt }}</th>
-            {% endfor %}
-        </tr>
-        {% for cat in categories %}
-        <tr>
-            <th>{{ cat }}</th>
-            {% for pt in points %}
-            <td class="{{ board[(cat, pt)]['state'] }}">
-                {% if board[(cat, pt)]['state'] == 'unused' %}
-                    <a href="{{ url_for('select_cell', category=cat, points=pt) }}">{{ pt }}</a>
-                {% elif board[(cat, pt)]['state'] == 'selected' %}
-                    <a href="{{ url_for('select_cell', category=cat, points=pt) }}">{{ pt }}</a>
-                {% else %}
-                    <span>—</span>
-                {% endif %}
-            </td>
-            {% endfor %}
-        </tr>
-        {% endfor %}
-    </table>
-
-    <h2>Команды</h2>
-    <ul>
-        {% for team in teams %}
-            <li {% if loop.index0 == current_team %}class="current"{% endif %}>
-                {{ team['name'] }} — {{ team['score'] }} очков (Рандомов осталось: {{ team['random_uses'] }})
-            </li>
-        {% endfor %}
-    </ul>
-</body>
-</html>
-'''
-
-cell_template = '''
-<!doctype html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Музыкальная игра</title>
-    <style>
-        button { margin: 5px; padding: 10px; }
-        /* Стандартный фон таймера */
-        body { background-color: lightgreen; }
-        /* Красный фон по истечении времени */
-        .time-up { background-color: lightcoral; }
-        .top-right {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-    </style>
-    <script>
-        let timeLeft = 30;  // Таймер на 30 секунд
-
-        function countdown() {
-            document.getElementById("timer").innerText = timeLeft + " секунд";
-            timeLeft -= 1;
-
-            if (timeLeft < 0) {
-                // По истечении времени меняем цвет фона на красный
-                document.body.classList.add("time-up");
-            } else {
-                // Если время еще не истекло, продолжаем отсчёт
-                setTimeout(countdown, 1000);
-            }
-        }
-
-        // Запуск таймера при загрузке страницы
-        window.onload = countdown;
-    </script>
-</head>
-<body>
-    <div class="top-right">
-        <a href="{{ url_for('download_game_state') }}" target="_blank">Сохранить игру</a>
-    </div>
-    <h1>Категория: {{ category }}, Очки: {{ points }}</h1>
-    <h2>Ход команды: {{ teams[current_team]['name'] }}</h2>
-    <h3>Оставшееся время: <span id="timer"></span></h3>
-    <form method="post">
-        <input type="hidden" name="random_used" value="{{ random_used }}">
-        <button name="action" value="full">Все баллы{% if random_used %} (x1.5){% endif %}</button>
-        <button name="action" value="half">Половина баллов{% if random_used %} (x1.5){% endif %}</button>
-        <button name="action" value="no">Не угадали</button>
-        <button name="action" value="reset">Сбросить выбор</button>
-    </form>
-</body>
-</html>
-'''
-
 from functools import wraps
 
 def save_state_decorator(f):
@@ -179,13 +57,35 @@ def save_state_decorator(f):
         return result
     return decorated_function
 
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if request.method == 'POST':
+        num_teams = int(request.form['num_teams'])
+        team_names = []
+        for i in range(num_teams):
+            name = request.form.get(f'team_{i+1}_name', f'Команда {i+1}')
+            team_names.append({'name': name, 'score': 0, 'random_uses': 3})
+        global teams, current_team
+        teams = team_names
+        current_team = 0
+        save_game_state()
+        return redirect(url_for('index'))
+    return render_template('setup.html')
+
 @app.route('/', methods=['GET'])
 def index():
-    return render_template_string(template, teams=teams, categories=categories, points=points, board=board, current_team=current_team)
+    # Если команды не настроены, перенаправляем на страницу настройки
+    if not teams:
+        return redirect(url_for('setup'))
+    return render_template('index.html', teams=teams, categories=genres, points=points, board=board, current_team=current_team)
 
 @app.route('/select/<category>/<int:points>', methods=['GET', 'POST'])
 @save_state_decorator
 def select_cell(category, points):
+    # Если команды не настроены, перенаправляем на страницу настройки
+    if not teams:
+        return redirect(url_for('setup'))
+
     global current_team
     cell = board[(category, points)]
     if cell['state'] == 'used':
@@ -218,11 +118,15 @@ def select_cell(category, points):
     else:
         if cell['state'] == 'unused':
             cell['state'] = 'selected'
-    return render_template_string(cell_template, teams=teams, current_team=current_team, category=category, points=points, random_used=random_used)
+    return render_template('cell.html', teams=teams, current_team=current_team, category=category, points=points, random_used=random_used)
 
 @app.route('/use_random', methods=['POST'])
 @save_state_decorator
 def use_random():
+    # Если команды не настроены, перенаправляем на страницу настройки
+    if not teams:
+        return redirect(url_for('setup'))
+
     global current_team
     team = teams[current_team]
     if team['random_uses'] <= 0:
@@ -249,6 +153,3 @@ def download_game_state():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-#too late
