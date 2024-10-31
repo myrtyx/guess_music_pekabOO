@@ -61,8 +61,18 @@
         <h1>Категория: <span class="text-info">{{ category }}</span>, Очки: <span class="text-info">{{ points }}</span></h1>
         <h2>Ход команды: <span class="text-primary">{{ teams[current_team]['name'] }}</span></h2>
         <h3>Оставшееся время: <span id="timer"></span></h3>
-        <!-- Здесь можно добавить воспроизведение мелодии -->
-        <p>Мелодия проигрывается... (здесь можно добавить функционал воспроизведения)</p>
+
+        <!-- Воспроизведение музыки -->
+        {% if music_file %}
+            <audio id="audioPlayer" controls autoplay>
+                <source src="{{ url_for('static', filename='music/' + music_file) }}" type="audio/mpeg">
+                Ваш браузер не поддерживает аудиоэлемент.
+            </audio>
+        {% else %}
+            <p>Нет доступного аудиофайла для этой ячейки.</p>
+        {% endif %}
+
+        <!-- Кнопки действий -->
         <form method="post" class="mt-4">
             <input type="hidden" name="random_used" value="{{ random_used }}">
             <button name="action" value="full" class="btn btn-success btn-animated">Все баллы{% if random_used %} (x1.5){% endif %}</button>
