@@ -1,8 +1,9 @@
 from flask import Flask, render_template_string, request, redirect, url_for
+import random
 
 app = Flask(__name__)
 
-teams = [{'name': f'Команда {i+1}', 'score': 0} for i in range(3)]
+teams = [{'name': f'Команда {i+1}', 'score': 0, 'random_uses': 3} for i in range(3)]
 categories = ['Рэп', 'Хип-хоп', 'Поп', 'Рок', 'Джаз']
 points = [100, 200, 300, 400, 500]
 board = {(cat, pt): {'state': 'unused'} for cat in categories for pt in points}
@@ -28,6 +29,13 @@ template = '''
 <body>
     <h1>Музыкальная игра</h1>
     <h2>Ход команды: {{ teams[current_team]['name'] }}</h2>
+    <form method="post" action="{{ url_for('use_random') }}">
+        {% if teams[current_team]['random_uses'] > 0 %}
+            <button type="submit">Рандом (осталось {{ teams[current_team]['random_uses'] }})</button>
+        {% else %}
+            <button type="submit" disabled>Рандом недоступен</button>
+        {% endif %}
+    </form>
     <table>
         <tr>
             <th>Категория\\Очки</th>
@@ -57,7 +65,7 @@ template = '''
     <ul>
         {% for team in teams %}
             <li {% if loop.index0 == current_team %}class="current"{% endif %}>
-                {{ team['name'] }} — {{ team['score'] }} очков
+                {{ team['name'] }} — {{ team['score'] }} очков (Рандомов осталось: {{ team['random_uses'] }})
             </li>
         {% endfor %}
     </ul>
@@ -81,8 +89,9 @@ cell_template = '''
     <!-- Здесь можно добавить воспроизведение мелодии -->
     <p>Мелодия проигрывается... (здесь можно добавить функционал воспроизведения)</p>
     <form method="post">
-        <button name="action" value="full">Все баллы</button>
-        <button name="action" value="half">Половина баллов</button>
+        <input type="hidden" name="random_used" value="{{ random_used }}">
+        <button name="action" value="full">Все баллы{% if random_used %} (x1.5){% endif %}</button>
+        <button name="action" value="half">Половина баллов{% if random_used %} (x1.5){% endif %}</button>
         <button name="action" value="no">Не угадали</button>
         <button name="action" value="reset">Сбросить выбор</button>
     </form>
@@ -90,7 +99,7 @@ cell_template = '''
 </html>
 '''
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
     return render_template_string(template, teams=teams, categories=categories, points=points, board=board, current_team=current_team)
 
@@ -101,15 +110,20 @@ def select_cell(category, points):
     if cell['state'] == 'used':
         return redirect(url_for('index'))
 
+    random_used = request.args.get('random', 'false') == 'true'
+
     if request.method == 'POST':
         action = request.form.get('action')
+        random_used = request.form.get('random_used') == 'True'
         if action == 'full':
-            teams[current_team]['score'] += points
+            multiplier = 1.5 if random_used else 1
+            teams[current_team]['score'] += int(points * multiplier)
             cell['state'] = 'used'
             current_team = (current_team + 1) % len(teams)
             return redirect(url_for('index'))
         elif action == 'half':
-            teams[current_team]['score'] += points // 2
+            multiplier = 1.5 if random_used else 1
+            teams[current_team]['score'] += int((points // 2) * multiplier)
             cell['state'] = 'used'
             current_team = (current_team + 1) % len(teams)
             return redirect(url_for('index'))
@@ -123,7 +137,30 @@ def select_cell(category, points):
     else:
         if cell['state'] == 'unused':
             cell['state'] = 'selected'
-    return render_template_string(cell_template, teams=teams, current_team=current_team, category=category, points=points)
+    return render_template_string(cell_template, teams=teams, current_team=current_team, category=category, points=points, random_used=random_used)
+
+@app.route('/use_random', methods=['POST'])
+def use_random():
+    global current_team
+    team = teams[current_team]
+    if team['random_uses'] <= 0:
+        return redirect(url_for('index'))
+
+    # Получаем список неиспользованных ячеек
+    unused_cells = [(cat, pt) for (cat, pt), cell in board.items() if cell['state'] == 'unused']
+    if not unused_cells:
+        return redirect(url_for('index'))
+
+    # Выбираем случайную ячейку
+    category, points = random.choice(unused_cells)
+    team['random_uses'] -= 1
+
+    # Помечаем ячейку как выбранную
+    cell = board[(category, points)]
+    cell['state'] = 'selected'
+
+    # Переходим на страницу ячейки с указанием, что был использован рандом
+    return redirect(url_for('select_cell', category=category, points=points, random='true'))
 
 if __name__ == '__main__':
     app.run(debug=True)
