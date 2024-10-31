@@ -1,13 +1,45 @@
-from flask import Flask, render_template_string, request, redirect, url_for
+from flask import Flask, render_template_string, request, redirect, url_for, send_file
 import random
+import json
+import os
 
 app = Flask(__name__)
 
-teams = [{'name': f'Команда {i+1}', 'score': 0, 'random_uses': 3} for i in range(3)]
-categories = ['Рэп', 'Хип-хоп', 'Поп', 'Рок', 'Джаз']
-points = [100, 200, 300, 400, 500]
-board = {(cat, pt): {'state': 'unused'} for cat in categories for pt in points}
-current_team = 0
+STATE_FILE = 'game_state.json'
+
+# Инициализация состояния игры
+def init_game_state():
+    global teams, categories, points, board, current_team
+    teams = [{'name': f'Команда {i+1}', 'score': 0, 'random_uses': 3} for i in range(3)]
+    categories = ['Рэп', 'Хип-хоп', 'Поп', 'Рок', 'Джаз']
+    points = [100, 200, 300, 400, 500]
+    board = {(cat, pt): {'state': 'unused'} for cat in categories for pt in points}
+    current_team = 0
+
+    # Если файл состояния существует, загружаем состояние из него
+    if os.path.exists(STATE_FILE):
+        load_game_state()
+
+# Сохранение состояния игры в файл
+def save_game_state():
+    game_state = {
+        'teams': teams,
+        'board': {str(k): v for k, v in board.items()},
+        'current_team': current_team
+    }
+    with open(STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(game_state, f, ensure_ascii=False, indent=4)
+
+# Загрузка состояния игры из файла
+def load_game_state():
+    global teams, board, current_team
+    with open(STATE_FILE, 'r', encoding='utf-8') as f:
+        game_state = json.load(f)
+        teams = game_state['teams']
+        board = {eval(k): v for k, v in game_state['board'].items()}
+        current_team = game_state['current_team']
+
+init_game_state()
 
 template = '''
 <!doctype html>
@@ -24,9 +56,17 @@ template = '''
         .current { font-weight: bold; }
         a { text-decoration: none; color: black; display: block; width: 100%; height: 100%; }
         button { margin: 5px; padding: 10px; }
+        .top-right {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
     </style>
 </head>
 <body>
+    <div class="top-right">
+        <a href="{{ url_for('download_game_state') }}" target="_blank">Сохранить игру</a>
+    </div>
     <h1>Музыкальная игра</h1>
     <h2>Ход команды: {{ teams[current_team]['name'] }}</h2>
     <form method="post" action="{{ url_for('use_random') }}">
@@ -81,13 +121,43 @@ cell_template = '''
     <title>Музыкальная игра</title>
     <style>
         button { margin: 5px; padding: 10px; }
+        /* Стандартный фон таймера */
+        body { background-color: lightgreen; }
+        /* Красный фон по истечении времени */
+        .time-up { background-color: lightcoral; }
+        .top-right {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
     </style>
+    <script>
+        let timeLeft = 30;  // Таймер на 30 секунд
+
+        function countdown() {
+            document.getElementById("timer").innerText = timeLeft + " секунд";
+            timeLeft -= 1;
+
+            if (timeLeft < 0) {
+                // По истечении времени меняем цвет фона на красный
+                document.body.classList.add("time-up");
+            } else {
+                // Если время еще не истекло, продолжаем отсчёт
+                setTimeout(countdown, 1000);
+            }
+        }
+
+        // Запуск таймера при загрузке страницы
+        window.onload = countdown;
+    </script>
 </head>
 <body>
+    <div class="top-right">
+        <a href="{{ url_for('download_game_state') }}" target="_blank">Сохранить игру</a>
+    </div>
     <h1>Категория: {{ category }}, Очки: {{ points }}</h1>
     <h2>Ход команды: {{ teams[current_team]['name'] }}</h2>
-    <!-- Здесь можно добавить воспроизведение мелодии -->
-    <p>Мелодия проигрывается... (здесь можно добавить функционал воспроизведения)</p>
+    <h3>Оставшееся время: <span id="timer"></span></h3>
     <form method="post">
         <input type="hidden" name="random_used" value="{{ random_used }}">
         <button name="action" value="full">Все баллы{% if random_used %} (x1.5){% endif %}</button>
@@ -99,11 +169,22 @@ cell_template = '''
 </html>
 '''
 
+from functools import wraps
+
+def save_state_decorator(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        result = f(*args, **kwargs)
+        save_game_state()
+        return result
+    return decorated_function
+
 @app.route('/', methods=['GET'])
 def index():
     return render_template_string(template, teams=teams, categories=categories, points=points, board=board, current_team=current_team)
 
 @app.route('/select/<category>/<int:points>', methods=['GET', 'POST'])
+@save_state_decorator
 def select_cell(category, points):
     global current_team
     cell = board[(category, points)]
@@ -140,6 +221,7 @@ def select_cell(category, points):
     return render_template_string(cell_template, teams=teams, current_team=current_team, category=category, points=points, random_used=random_used)
 
 @app.route('/use_random', methods=['POST'])
+@save_state_decorator
 def use_random():
     global current_team
     team = teams[current_team]
@@ -159,8 +241,14 @@ def use_random():
     cell = board[(category, points)]
     cell['state'] = 'selected'
 
-    # Переходим на страницу ячейки с указанием, что был использован рандом
     return redirect(url_for('select_cell', category=category, points=points, random='true'))
+
+@app.route('/download_game_state')
+def download_game_state():
+    return send_file(STATE_FILE, as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+#too late
