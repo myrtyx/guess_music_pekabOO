@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pekabOO — Админка</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #13131a;
+            --surface-2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #7a7a8e;
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.3);
+            --green: #22c55e;
+            --green-dim: rgba(34, 197, 94, 0.15);
+            --red: #ef4444;
+            --red-dim: rgba(239, 68, 68, 0.15);
+            --amber: #f59e0b;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 500px 400px at 30% 10%, rgba(168, 85, 247, 0.06), transparent),
+                radial-gradient(ellipse 400px 400px at 80% 90%, rgba(34, 197, 94, 0.04), transparent);
+            pointer-events: none;
+        }
+
+        /* === NAV === */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 32px;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .logo {
+            font-size: 22px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo-sub {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--text-dim);
+            margin-left: 12px;
+            -webkit-text-fill-color: var(--text-dim);
+            background: none;
+        }
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .nav-links a:hover { color: var(--text); background: var(--surface-2); }
+
+        /* === MAIN === */
+        .main {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* === CARDS === */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .card-head {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-head h3 {
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .card-head .icon {
+            font-size: 18px;
+        }
+        .card-body {
+            padding: 24px;
+        }
+
+        /* === GRID CONFIG === */
+        .config-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+        }
+        .config-field {
+            flex: 1;
+            min-width: 200px;
+        }
+        .config-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+        .config-field input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .config-field input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .config-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 50px;
+            background: var(--accent);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .config-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+
+        /* === MUSIC TABLE === */
+        .music-grid {
+            display: grid;
+            gap: 2px;
+            background: var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .music-grid .hdr {
+            background: var(--surface-2);
+            padding: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+        .music-grid .genre-label {
+            background: var(--surface-2);
+            padding: 12px 16px;
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+        }
+        .music-cell {
+            background: var(--bg);
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 70px;
+        }
+        .music-cell:hover {
+            background: var(--surface-2);
+        }
+        .music-cell.filled {
+            background: var(--green-dim);
+        }
+        .music-cell.filled:hover {
+            background: rgba(34, 197, 94, 0.25);
+        }
+        .music-cell .vid-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--green);
+        }
+        .music-cell .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-dim);
+        }
+        .music-cell .status-dot.dot-ok { background: var(--green); }
+        .music-cell .status-dot.dot-err { background: var(--red); }
+        .music-cell .status-dot.dot-checking {
+            background: var(--accent);
+            animation: dot-pulse 1s infinite;
+        }
+        @keyframes dot-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .music-cell .start-label {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+        .music-cell .empty-label {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .hint-text {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+
+        /* === DANGER ZONE === */
+        .danger-btn {
+            padding: 12px 24px;
+            border: 1px solid var(--red);
+            border-radius: 50px;
+            background: var(--red-dim);
+            color: var(--red);
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .danger-btn:hover {
+            background: var(--red);
+            color: #fff;
+        }
+
+        /* === MODAL === */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 32px;
+            width: 100%;
+            max-width: 520px;
+            margin: 24px;
+            box-shadow: 0 16px 60px rgba(0,0,0,0.6);
+            animation: modal-in 0.3s ease-out;
+        }
+        @keyframes modal-in {
+            from { opacity: 0; transform: scale(0.95) translateY(16px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .modal-subtitle {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 24px;
+        }
+        .modal-field {
+            margin-bottom: 16px;
+        }
+        .modal-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+        .modal-field input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .modal-field input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .modal-preview {
+            margin-top: 12px;
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: none;
+        }
+        .modal-preview iframe {
+            width: 100%;
+            height: 200px;
+            border: none;
+        }
+        .modal-status {
+            margin-top: 12px;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            display: none;
+        }
+        .modal-status.checking {
+            display: block;
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            color: var(--accent);
+        }
+        .modal-status.ok {
+            display: block;
+            background: var(--green-dim);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: var(--green);
+        }
+        .modal-status.error {
+            display: block;
+            background: var(--red-dim);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--red);
+        }
+        .modal-track-info {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-dim);
+            display: none;
+        }
+        .modal-track-info.visible {
+            display: block;
+        }
+        .modal-track-info .track-title {
+            color: var(--text);
+            font-weight: 600;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .modal-actions .btn-save {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 50px;
+            background: var(--green);
+            color: #0a0a0f;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-actions .btn-save:hover { transform: translateY(-1px); }
+        .modal-actions .btn-delete {
+            padding: 14px 20px;
+            border: 1px solid var(--red);
+            border-radius: 50px;
+            background: transparent;
+            color: var(--red);
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-actions .btn-delete:hover { background: var(--red-dim); }
+        .modal-actions .btn-cancel {
+            padding: 14px 20px;
+            border: 1px solid var(--border);
+            border-radius: 50px;
+            background: transparent;
+            color: var(--text-dim);
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-actions .btn-cancel:hover { background: var(--surface-2); }
+
+        /* === ANIMATIONS === */
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card:nth-child(1) { animation: fade-up 0.5s ease-out; }
+        .card:nth-child(2) { animation: fade-up 0.5s ease-out 0.1s both; }
+        .card:nth-child(3) { animation: fade-up 0.5s ease-out 0.2s both; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div>
+            <span class="logo">pekabOO</span>
+            <span class="logo-sub">Админка</span>
+        </div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}">К игре</a>
+        </div>
+    </nav>
+
+    <div class="main">
+
+        <!-- Grid config -->
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#9881;</span>
+                <h3>Настройка сетки</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('admin_update_grid') }}">
+                    <div class="config-row">
+                        <div class="config-field">
+                            <label>Жанры (через запятую)</label>
+                            <input type="text" name="genres" value="{{ genres | join(', ') }}">
+                        </div>
+                        <div class="config-field">
+                            <label>Очки (через запятую)</label>
+                            <input type="text" name="points" value="{{ points | join(', ') }}">
+                        </div>
+                        <button type="submit" class="config-btn">Обновить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Music board -->
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#127925;</span>
+                <h3>Музыка на доске</h3>
+            </div>
+            <div class="card-body">
+                <p class="hint-text">Нажми на ячейку, чтобы назначить трек (YouTube или SoundCloud)</p>
+                <div class="music-grid" style="grid-template-columns: 140px repeat({{ points|length }}, 1fr);">
+                    <div class="hdr"></div>
+                    {% for pt in points %}
+                        <div class="hdr">{{ pt }}</div>
+                    {% endfor %}
+                    {% for genre in genres %}
+                        <div class="genre-label">{{ genre }}</div>
+                        {% for pt in points %}
+                            {% set entry = music_mapping.get((genre, pt)) %}
+                            {% set cell_url = entry.sc_url if entry and entry.type == 'soundcloud' else (entry.video_id if entry else '') %}
+                            <div class="music-cell {{ 'filled' if entry else '' }}"
+                                 onclick="openModal('{{ genre }}', {{ pt }}, '{{ cell_url }}', {{ entry.start if entry else 0 }}, '{{ entry.type if entry else '' }}')"
+                                 {% if entry %}data-check-type="{{ entry.type }}" data-check-ref="{{ cell_url }}"{% endif %}>
+                                {% if entry %}
+                                    <span class="status-dot dot-checking" data-dot-ref="{{ cell_url }}"></span>
+                                    {% if entry.type == 'soundcloud' %}
+                                        <span class="vid-id" style="color: var(--amber);">SC</span>
+                                    {% else %}
+                                        <span class="vid-id">{{ entry.video_id[:8] }}...</span>
+                                    {% endif %}
+                                    {% if entry.start > 0 %}
+                                        <span class="start-label">c {{ entry.start }}s</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="empty-label">+</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Timers -->
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#9202;</span>
+                <h3>Таймеры</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('admin_set_timers') }}">
+                    <div class="config-row">
+                        <div class="config-field">
+                            <label>Время проигрывания аудио (сек)</label>
+                            <input type="number" name="play_duration" value="{{ play_duration }}" min="5" max="300">
+                        </div>
+                        <div class="config-field">
+                            <label>Время на ответ (сек)</label>
+                            <input type="number" name="guess_duration" value="{{ guess_duration }}" min="5" max="300">
+                        </div>
+                        <button type="submit" class="config-btn">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Danger zone -->
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#9888;</span>
+                <h3>Управление</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('admin_reset_game') }}" onsubmit="return confirm('Сбросить игру? Счёт и прогресс обнулятся.')">
+                    <button type="submit" class="danger-btn">Сбросить игру</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal-box">
+            <div class="modal-title">Назначить музыку</div>
+            <div class="modal-subtitle" id="modalLabel"></div>
+            <form method="post" action="{{ url_for('admin_set_music') }}" id="modalForm">
+                <input type="hidden" name="category" id="modalCat">
+                <input type="hidden" name="points" id="modalPts">
+                <div class="modal-field">
+                    <label>YouTube или SoundCloud ссылка</label>
+                    <input type="text" name="music_url" id="modalUrl" placeholder="YouTube или SoundCloud ссылка...">
+                </div>
+                <div class="modal-field">
+                    <label>Начать с секунды</label>
+                    <input type="number" name="start_seconds" id="modalStart" min="0" value="0" placeholder="0">
+                </div>
+                <div class="modal-status" id="statusBox"></div>
+                <div class="modal-track-info" id="trackInfo">
+                    <span class="track-title" id="trackTitle"></span><br>
+                    <span id="trackAuthor"></span>
+                </div>
+                <div class="modal-preview" id="previewBox">
+                    <iframe id="previewFrame" allowfullscreen></iframe>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-delete" onclick="clearAndSubmit()">Удалить</button>
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Отмена</button>
+                    <button type="submit" class="btn-save">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- YouTube IFrame API for real embed testing -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <div id="yt-test-container" style="position:fixed;left:-9999px;top:0;width:320px;height:180px;"></div>
+
+    <script>
+        var checkTimeout = null;
+        var ytApiReady = false;
+        var ytTestPlayer = null;
+        var ytCheckCallback = null;
+        var ytCheckTimer = null;
+
+        function onYouTubeIframeAPIReady() { ytApiReady = true; runBatchCheck(); }
+
+        function isSoundCloud(url) {
+            return url.indexOf('soundcloud.com/') !== -1;
+        }
+
+        function extractVideoId(url) {
+            if (!url) return '';
+            if (url.length === 11 && url.indexOf('/') === -1 && url.indexOf('.') === -1) return url;
+            var m = url.match(/youtu\.be\/([^?&]+)/);
+            if (m) return m[1];
+            m = url.match(/[?&]v=([^&]+)/);
+            if (m) return m[1];
+            m = url.match(/\/embed\/([^?&]+)/);
+            if (m) return m[1];
+            return url;
+        }
+
+        /* Real YouTube embed check — actually tries to play and catches errors */
+        function checkYouTubeEmbed(videoId, onResult) {
+            if (!ytApiReady) {
+                // Fallback to oEmbed if API not ready
+                onResult('unknown');
+                return;
+            }
+
+            // Clean up previous test
+            if (ytTestPlayer && ytTestPlayer.destroy) {
+                try { ytTestPlayer.destroy(); } catch(e) {}
+            }
+            clearTimeout(ytCheckTimer);
+
+            var container = document.getElementById('yt-test-container');
+            container.innerHTML = '<div id="yt-test-player"></div>';
+
+            var resolved = false;
+            function resolve(status) {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(ytCheckTimer);
+                onResult(status);
+            }
+
+            // Timeout — if nothing happens in 8 seconds, assume it works
+            ytCheckTimer = setTimeout(function() { resolve('ok'); }, 8000);
+
+            ytTestPlayer = new YT.Player('yt-test-player', {
+                height: '180',
+                width: '320',
+                videoId: videoId,
+                playerVars: { 'autoplay': 1, 'controls': 0, 'mute': 1 },
+                events: {
+                    'onReady': function(e) {
+                        e.target.playVideo();
+                    },
+                    'onStateChange': function(e) {
+                        // PLAYING = 1 means it actually works
+                        if (e.data === YT.PlayerState.PLAYING) {
+                            e.target.pauseVideo();
+                            resolve('ok');
+                        }
+                        // UNSTARTED = -1 after a while can mean blocked
+                    },
+                    'onError': function(e) {
+                        // Error codes: 2=invalid, 5=HTML5 error, 100=not found, 101/150=embed blocked
+                        resolve('error');
+                    }
+                }
+            });
+        }
+
+        function openModal(genre, pts, currentUrl, startSec, type) {
+            document.getElementById('modalCat').value = genre;
+            document.getElementById('modalPts').value = pts;
+            document.getElementById('modalLabel').textContent = genre + ' \u2014 ' + pts + ' \u043e\u0447\u043a\u043e\u0432';
+            document.getElementById('modalUrl').value = currentUrl || '';
+            document.getElementById('modalStart').value = startSec || 0;
+            resetStatus();
+            if (currentUrl) checkUrl(currentUrl);
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+            document.getElementById('previewFrame').src = '';
+            resetStatus();
+        }
+
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        function resetStatus() {
+            var s = document.getElementById('statusBox');
+            s.className = 'modal-status';
+            s.textContent = '';
+            document.getElementById('trackInfo').className = 'modal-track-info';
+            document.getElementById('previewBox').style.display = 'none';
+            document.getElementById('previewFrame').src = '';
+        }
+
+        function setStatus(type, text) {
+            var s = document.getElementById('statusBox');
+            s.className = 'modal-status ' + type;
+            s.textContent = text;
+        }
+
+        function checkUrl(url) {
+            if (!url) { resetStatus(); return; }
+            setStatus('checking', 'Проверяю...');
+
+            if (isSoundCloud(url)) {
+                fetch('https://soundcloud.com/oembed?url=' + encodeURIComponent(url) + '&format=json')
+                    .then(function(r) {
+                        if (!r.ok) throw new Error();
+                        return r.json();
+                    })
+                    .then(function(data) {
+                        setStatus('ok', 'SoundCloud трек доступен');
+                        document.getElementById('trackTitle').textContent = data.title || '';
+                        document.getElementById('trackAuthor').textContent = data.author_name || '';
+                        document.getElementById('trackInfo').className = 'modal-track-info visible';
+                        document.getElementById('previewFrame').src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(url) + '&auto_play=false&visual=true';
+                        document.getElementById('previewBox').style.display = 'block';
+                    })
+                    .catch(function() {
+                        setStatus('error', 'SoundCloud трек недоступен или ссылка неверна.');
+                    });
+            } else {
+                var videoId = extractVideoId(url);
+                // First get title via oEmbed, then REALLY test embed
+                fetch('https://noembed.com/embed?url=https://www.youtube.com/watch?v=' + videoId)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.title) {
+                            document.getElementById('trackTitle').textContent = data.title || '';
+                            document.getElementById('trackAuthor').textContent = data.author_name || '';
+                            document.getElementById('trackInfo').className = 'modal-track-info visible';
+                        }
+                    })
+                    .catch(function() {});
+
+                // Real embed test
+                checkYouTubeEmbed(videoId, function(status) {
+                    if (status === 'ok') {
+                        setStatus('ok', 'YouTube видео реально воспроизводится');
+                        document.getElementById('previewFrame').src = 'https://www.youtube.com/embed/' + videoId + '?autoplay=0';
+                        document.getElementById('previewBox').style.display = 'block';
+                    } else {
+                        setStatus('error', 'YouTube видео заблокировано для встраивания. Используй SoundCloud.');
+                        document.getElementById('previewBox').style.display = 'none';
+                    }
+                });
+            }
+        }
+
+        document.getElementById('modalUrl').addEventListener('input', function() {
+            clearTimeout(checkTimeout);
+            var val = this.value.trim();
+            if (!val) { resetStatus(); return; }
+            checkTimeout = setTimeout(function() { checkUrl(val); }, 500);
+        });
+
+        function clearAndSubmit() {
+            document.getElementById('modalUrl').value = '';
+            document.getElementById('modalStart').value = '0';
+            document.getElementById('modalForm').submit();
+        }
+
+        /* Batch-check all tracks on page load */
+        var batchQueue = [];
+
+        function runBatchCheck() {
+            var cells = document.querySelectorAll('.music-cell[data-check-ref]');
+            var checked = {};
+
+            cells.forEach(function(cell) {
+                var type = cell.getAttribute('data-check-type');
+                var ref = cell.getAttribute('data-check-ref');
+                if (!ref || checked[ref]) return;
+                checked[ref] = true;
+
+                if (type === 'soundcloud') {
+                    fetch('https://soundcloud.com/oembed?url=' + encodeURIComponent(ref) + '&format=json')
+                        .then(function(r) {
+                            if (!r.ok) throw new Error();
+                            setDots(ref, 'dot-ok');
+                        })
+                        .catch(function() { setDots(ref, 'dot-err'); });
+                } else {
+                    batchQueue.push(ref);
+                }
+            });
+
+            // Check YouTube videos one by one (can't run multiple IFrame players simultaneously)
+            processBatchQueue();
+        }
+
+        function processBatchQueue() {
+            if (batchQueue.length === 0) return;
+            var vid = batchQueue.shift();
+            checkYouTubeEmbed(vid, function(status) {
+                setDots(vid, status === 'ok' ? 'dot-ok' : 'dot-err');
+                // Next one after a short delay
+                setTimeout(processBatchQueue, 300);
+            });
+        }
+
+        function setDots(ref, cls) {
+            document.querySelectorAll('[data-dot-ref="' + ref + '"]').forEach(function(dot) {
+                dot.className = 'status-dot ' + cls;
+            });
+        }
+
+        // Start batch check when API is ready (or if already ready)
+        if (ytApiReady) runBatchCheck();
+    </script>
+</body>
+</html>

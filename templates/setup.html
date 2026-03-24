@@ -2,56 +2,181 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Настройка игры</title>
-    <!-- Подключение Bootstrap -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
-    <!-- Дополнительные стили -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pekabOO — Настройка</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        .container {
-            max-width: 600px;
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #13131a;
+            --surface-2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #7a7a8e;
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.3);
+            --green: #22c55e;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 600px 400px at 50% 30%, rgba(168, 85, 247, 0.1), transparent);
+            pointer-events: none;
+        }
+
+        .setup-card {
+            position: relative;
+            z-index: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 480px;
+            margin: 24px;
+            box-shadow: 0 8px 60px rgba(0,0,0,0.5);
+            animation: fade-up 0.6s ease-out;
+        }
+
+        .setup-title {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .setup-title .logo {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .setup-subtitle {
+            text-align: center;
+            font-size: 15px;
+            color: var(--text-dim);
+            margin-bottom: 36px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .field-group {
+            margin-bottom: 20px;
+        }
+
+        #team-names .field-group {
+            animation: fade-up 0.3s ease-out;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            margin-top: 12px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="text-center">Настройка игры</h1>
+    <div class="setup-card">
+        <div class="setup-title"><span class="logo">pekabOO</span></div>
+        <p class="setup-subtitle">Настрой команды и начни игру</p>
+
         <form method="post">
-            <div class="form-group">
-                <label for="num_teams">Количество команд:</label>
-                <input type="number" class="form-control" id="num_teams" name="num_teams" min="1" max="10" value="3" required>
+            <div class="field-group">
+                <label for="num_teams">Количество команд</label>
+                <input type="number" id="num_teams" name="num_teams" min="1" max="10" value="3" required>
             </div>
             <div id="team-names"></div>
-            <button type="submit" class="btn btn-primary">Начать игру</button>
+            <button type="submit" class="submit-btn">Начать игру</button>
         </form>
     </div>
 
-    <!-- Скрипт для динамического добавления полей ввода названий команд -->
     <script>
-        const numTeamsInput = document.getElementById('num_teams');
-        const teamNamesDiv = document.getElementById('team-names');
+        var numInput = document.getElementById('num_teams');
+        var namesDiv = document.getElementById('team-names');
 
         function updateTeamNames() {
-            const numTeams = parseInt(numTeamsInput.value);
-            teamNamesDiv.innerHTML = '';
-            for (let i = 1; i <= numTeams; i++) {
-                const div = document.createElement('div');
-                div.className = 'form-group';
-                const label = document.createElement('label');
-                label.innerText = `Название команды ${i}:`;
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'form-control';
-                input.name = `team_${i}_name`;
-                input.placeholder = `Команда ${i}`;
-                div.appendChild(label);
-                div.appendChild(input);
-                teamNamesDiv.appendChild(div);
+            var n = parseInt(numInput.value) || 0;
+            namesDiv.innerHTML = '';
+            for (var i = 1; i <= n; i++) {
+                var div = document.createElement('div');
+                div.className = 'field-group';
+                var lbl = document.createElement('label');
+                lbl.textContent = 'Команда ' + i;
+                var inp = document.createElement('input');
+                inp.type = 'text';
+                inp.name = 'team_' + i + '_name';
+                inp.placeholder = 'Название команды ' + i;
+                div.appendChild(lbl);
+                div.appendChild(inp);
+                namesDiv.appendChild(div);
             }
         }
 
-        numTeamsInput.addEventListener('input', updateTeamNames);
-
-        // Инициализация полей при загрузке страницы
+        numInput.addEventListener('input', updateTeamNames);
         updateTeamNames();
     </script>
 </body>

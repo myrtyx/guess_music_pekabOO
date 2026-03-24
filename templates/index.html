@@ -2,99 +2,365 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Музыкальная игра</title>
-    <!-- Подключение Bootstrap -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
-    <!-- Дополнительные стили -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pekabOO — Угадай мелодию</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        .unused { background-color: lightgreen; }
-        .selected { background-color: yellow; }
-        .used { background-color: white; }
-        .current { font-weight: bold; }
-        .top-right {
-            position: absolute;
-            top: 10px;
-            right: 10px;
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #13131a;
+            --surface-2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #7a7a8e;
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.3);
+            --green: #22c55e;
+            --green-glow: rgba(34, 197, 94, 0.25);
+            --amber: #f59e0b;
+            --amber-glow: rgba(245, 158, 11, 0.25);
+            --red: #ef4444;
+            --radius: 12px;
         }
-        .table td, .table th {
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* === ANIMATED BACKGROUND === */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 600px 400px at 20% 20%, rgba(168, 85, 247, 0.08), transparent),
+                radial-gradient(ellipse 500px 500px at 80% 80%, rgba(34, 197, 94, 0.06), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* === NAV === */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 32px;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .logo {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 400;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .nav-links a:hover {
+            color: var(--text);
+            background: var(--surface-2);
+        }
+
+        /* === MAIN CONTENT === */
+        .main {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* === TEAM TURN HEADER === */
+        .turn-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .turn-info h2 {
+            font-size: clamp(18px, 3vw, 26px);
+            font-weight: 300;
+            color: var(--text-dim);
+        }
+        .turn-info h2 strong {
+            font-weight: 800;
+            color: var(--text);
+        }
+        .random-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 50px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .random-btn.active {
+            background: linear-gradient(135deg, var(--amber), #fbbf24);
+            color: #0a0a0f;
+            box-shadow: 0 4px 20px var(--amber-glow);
+        }
+        .random-btn.active:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px var(--amber-glow);
+        }
+        .random-btn.disabled {
+            background: var(--surface-2);
+            color: var(--text-dim);
+            cursor: not-allowed;
+        }
+        .random-icon {
+            font-size: 18px;
+        }
+
+        /* === GAME BOARD === */
+        .board {
+            display: grid;
+            gap: 2px;
+            background: var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 40px rgba(0,0,0,0.4);
+        }
+        .board-header {
+            display: contents;
+        }
+        .board-header .cell {
+            background: var(--surface);
+            font-weight: 700;
+            font-size: clamp(12px, 1.8vw, 16px);
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .board-row {
+            display: contents;
+        }
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(12px, 2vw, 20px);
             text-align: center;
-            vertical-align: middle;
+            min-height: 64px;
         }
-        /* Анимация для кнопок */
-        .btn-animated {
-            transition: transform 0.2s;
+        .cat-label {
+            background: var(--surface);
+            font-weight: 700;
+            font-size: clamp(13px, 1.8vw, 17px);
+            color: var(--accent);
+            letter-spacing: 0.5px;
         }
-        .btn-animated:hover {
+
+        /* Cell states */
+        .cell-unused {
+            background: var(--surface-2);
+            transition: all 0.2s;
+        }
+        .cell-unused:hover {
+            background: #222233;
+        }
+        .cell-unused a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            text-decoration: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: clamp(16px, 2.5vw, 24px);
+            color: var(--green);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .cell-unused a:hover {
+            color: #fff;
+            text-shadow: 0 0 20px var(--green-glow);
             transform: scale(1.1);
+        }
+        .cell-selected {
+            background: var(--surface-2);
+        }
+        .cell-selected a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            text-decoration: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: clamp(16px, 2.5vw, 24px);
+            color: var(--amber);
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        .cell-used {
+            background: var(--bg);
+        }
+        .cell-used span {
+            color: var(--border);
+            font-size: 20px;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { text-shadow: 0 0 8px var(--amber-glow); }
+            50% { text-shadow: 0 0 24px var(--amber-glow); }
+        }
+
+        /* === TEAMS SECTION === */
+        .teams-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .team-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            transition: all 0.3s;
+        }
+        .team-card.active-team {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), transparent);
+        }
+        .team-name {
+            font-weight: 700;
+            font-size: 17px;
+            margin-bottom: 6px;
+        }
+        .team-score {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--green);
+        }
+        .team-meta {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* === ENTRANCE ANIMATIONS === */
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .turn-header { animation: fade-up 0.5s ease-out; }
+        .board { animation: fade-up 0.6s ease-out 0.1s both; }
+        .teams-section { animation: fade-up 0.6s ease-out 0.2s both; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 <body>
-    <!-- Навигационная панель -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="#">Музыкальная игра</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav ml-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('download_game_state') }}" target="_blank">Сохранить игру</a>
-                </li>
-            </ul>
+    <nav>
+        <span class="logo">pekabOO</span>
+        <div class="nav-links">
+            <a href="{{ url_for('admin') }}">Админка</a>
+            <a href="{{ url_for('download_game_state') }}">Сохранить</a>
         </div>
     </nav>
 
-    <div class="container mt-4">
-        <h2>Ход команды: <span class="text-primary">{{ teams[current_team]['name'] }}</span></h2>
-        <form method="post" action="{{ url_for('use_random') }}">
-            {% if teams[current_team]['random_uses'] > 0 %}
-                <button type="submit" class="btn btn-warning btn-animated">Рандом (осталось {{ teams[current_team]['random_uses'] }})</button>
-            {% else %}
-                <button type="submit" class="btn btn-secondary" disabled>Рандом недоступен</button>
-            {% endif %}
-        </form>
+    <div class="main">
+        <div class="turn-header">
+            <div class="turn-info">
+                <h2>Ходит <strong>{{ teams[current_team]['name'] }}</strong></h2>
+            </div>
+            <form method="post" action="{{ url_for('use_random') }}">
+                {% if teams[current_team]['random_uses'] > 0 %}
+                    <button type="submit" class="random-btn active">
+                        <span class="random-icon">&#127922;</span>
+                        Рандом ({{ teams[current_team]['random_uses'] }})
+                    </button>
+                {% else %}
+                    <button type="submit" class="random-btn disabled" disabled>
+                        <span class="random-icon">&#127922;</span>
+                        Рандом недоступен
+                    </button>
+                {% endif %}
+            </form>
+        </div>
 
-        <!-- Таблица с вопросами -->
-        <table class="table table-bordered mt-4">
-            <thead class="thead-dark">
-                <tr>
-                    <th>Категория\Очки</th>
-                    {% for pt in points %}
-                        <th>{{ pt }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for cat in categories %}
-                <tr>
-                    <th>{{ cat }}</th>
-                    {% for pt in points %}
-                    <td class="{{ board[(cat, pt)]['state'] }}">
-                        {% if board[(cat, pt)]['state'] == 'unused' %}
-                            <a href="{{ url_for('select_cell', category=cat, points=pt) }}" class="btn btn-success btn-animated">{{ pt }}</a>
-                        {% elif board[(cat, pt)]['state'] == 'selected' %}
-                            <a href="{{ url_for('select_cell', category=cat, points=pt) }}" class="btn btn-warning btn-animated">{{ pt }}</a>
-                        {% else %}
-                            <span>—</span>
-                        {% endif %}
-                    </td>
-                    {% endfor %}
-                </tr>
+        <div class="board" style="grid-template-columns: auto repeat({{ points|length }}, 1fr);">
+            <div class="board-header">
+                <div class="cell" style="background: var(--bg);"></div>
+                {% for pt in points %}
+                    <div class="cell">{{ pt }}</div>
                 {% endfor %}
-            </tbody>
-        </table>
-
-        <!-- Список команд -->
-        <h2>Команды</h2>
-        <ul class="list-group">
-            {% for team in teams %}
-                <li class="list-group-item {% if loop.index0 == current_team %}active{% endif %}">
-                    {{ team['name'] }} — {{ team['score'] }} очков (Рандомов осталось: {{ team['random_uses'] }})
-                </li>
+            </div>
+            {% for cat in categories %}
+            <div class="board-row">
+                <div class="cell cat-label">{{ cat }}</div>
+                {% for pt in points %}
+                    {% set state = board[(cat, pt)]['state'] %}
+                    {% if state == 'unused' %}
+                        <div class="cell cell-unused">
+                            <a href="{{ url_for('select_cell', category=cat, pts=pt) }}">{{ pt }}</a>
+                        </div>
+                    {% elif state == 'selected' %}
+                        <div class="cell cell-selected">
+                            <a href="{{ url_for('select_cell', category=cat, pts=pt) }}">{{ pt }}</a>
+                        </div>
+                    {% else %}
+                        <div class="cell cell-used"><span>&mdash;</span></div>
+                    {% endif %}
+                {% endfor %}
+            </div>
             {% endfor %}
-        </ul>
-    </div>
+        </div>
 
-    <!-- Подключение JavaScript Bootstrap и jQuery -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/js/bootstrap.bundle.min.js"></script>
+        <div class="teams-section">
+            <h3>Команды</h3>
+            <div class="teams-grid">
+                {% for team in teams %}
+                <div class="team-card {% if loop.index0 == current_team %}active-team{% endif %}">
+                    <div class="team-name">{{ team['name'] }}</div>
+                    <div class="team-score">{{ team['score'] }}</div>
+                    <div class="team-meta">Рандом: {{ team['random_uses'] }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 </body>
 </html>

@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pekabOO — Ответ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #13131a;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #7a7a8e;
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.4);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .bg-cover {
+            position: fixed;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            filter: blur(40px) brightness(0.3);
+            transform: scale(1.2);
+            z-index: 0;
+        }
+
+        .reveal-card {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            padding: 32px 24px;
+        }
+
+        .thumb-container {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 16px 60px rgba(0,0,0,0.6), 0 0 40px var(--accent-glow);
+            margin-bottom: 32px;
+            opacity: 0;
+            transform: scale(0.9);
+            animation: thumb-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+        }
+        .thumb-container img {
+            width: 100%;
+            display: block;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+        }
+        .thumb-container::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(transparent 50%, rgba(10, 10, 15, 0.8));
+            pointer-events: none;
+        }
+        .thumb-shimmer {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(110deg, var(--surface) 30%, var(--border) 50%, var(--surface) 70%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            from { background-position: 200% 0; }
+            to { background-position: -200% 0; }
+        }
+
+        .song-title {
+            font-size: clamp(24px, 5vw, 38px);
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 8px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: text-in 0.6s ease-out 0.8s forwards;
+        }
+        .song-artist {
+            font-size: clamp(16px, 3vw, 22px);
+            font-weight: 400;
+            color: var(--accent);
+            margin-bottom: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: text-in 0.6s ease-out 1s forwards;
+        }
+        .song-source {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-bottom: 32px;
+            opacity: 0;
+            animation: text-in 0.6s ease-out 1.1s forwards;
+        }
+        .song-loading { color: var(--text-dim); font-size: 16px; }
+
+        .continue-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 40px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 17px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 24px var(--accent-glow);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: text-in 0.6s ease-out 1.2s forwards;
+        }
+        .continue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px var(--accent-glow);
+        }
+
+        @keyframes thumb-in { to { opacity: 1; transform: scale(1); } }
+        @keyframes text-in { to { opacity: 1; transform: translateY(0); } }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+            .thumb-container, .song-title, .song-artist, .song-source, .continue-btn { opacity: 1; transform: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-cover" id="bgCover"></div>
+
+    <div class="reveal-card">
+        <div class="thumb-container">
+            <div class="thumb-shimmer" id="shimmer"></div>
+            <img id="thumbnail" src="" style="display:none;"
+                 onload="this.style.display='block'; document.getElementById('shimmer').style.display='none';">
+        </div>
+
+        <div class="song-title" id="songTitle">
+            <span class="song-loading">Загрузка...</span>
+        </div>
+        <div class="song-artist" id="songArtist"></div>
+        <div class="song-source" id="songSource"></div>
+
+        <a href="{{ url_for('index') }}" class="continue-btn">Далее &rarr;</a>
+    </div>
+
+    <script>
+        var source = '{{ source }}';
+        var ref = '{{ ref }}';
+
+        function setResult(title, artist, thumbUrl, sourceName) {
+            // Parse "Artist - Song" from title
+            var songTitle = title;
+            var songArtist = artist || '';
+            var seps = [' - ', ' \u2014 ', ' \u2013 ', ' | '];
+            for (var i = 0; i < seps.length; i++) {
+                if (title.indexOf(seps[i]) !== -1) {
+                    var parts = title.split(seps[i]);
+                    songArtist = parts[0].trim();
+                    songTitle = parts.slice(1).join(seps[i]).trim();
+                    break;
+                }
+            }
+            // Clean common suffixes
+            songTitle = songTitle
+                .replace(/\s*\(Official.*?\)/gi, '')
+                .replace(/\s*\[Official.*?\]/gi, '')
+                .replace(/\s*\(Lyrics.*?\)/gi, '')
+                .replace(/\s*\[Lyrics.*?\]/gi, '')
+                .replace(/\s*\(Audio.*?\)/gi, '')
+                .replace(/\s*\[Audio.*?\]/gi, '')
+                .replace(/\s*\(Music Video\)/gi, '')
+                .replace(/\s*\[Music Video\]/gi, '')
+                .replace(/\s*\(HD\)/gi, '')
+                .replace(/\s*\[HD\]/gi, '')
+                .trim();
+
+            document.getElementById('songTitle').textContent = songTitle;
+            document.getElementById('songArtist').textContent = songArtist;
+            document.getElementById('songSource').textContent = sourceName;
+
+            if (thumbUrl) {
+                document.getElementById('thumbnail').src = thumbUrl;
+                document.getElementById('bgCover').style.backgroundImage = 'url(' + thumbUrl + ')';
+            }
+        }
+
+        if (source === 'yt') {
+            // YouTube — set thumbnail immediately, fetch title via oEmbed
+            var ytThumb = 'https://img.youtube.com/vi/' + ref + '/maxresdefault.jpg';
+            document.getElementById('thumbnail').src = ytThumb;
+            document.getElementById('thumbnail').style.display = 'block';
+            document.getElementById('thumbnail').onerror = function() {
+                this.src = 'https://img.youtube.com/vi/' + ref + '/hqdefault.jpg';
+            };
+            document.getElementById('bgCover').style.backgroundImage = 'url(' + ytThumb + ')';
+
+            fetch('https://noembed.com/embed?url=https://www.youtube.com/watch?v=' + ref)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    setResult(data.title || ref, data.author_name || '', null, 'YouTube');
+                })
+                .catch(function() {
+                    document.getElementById('songTitle').textContent = 'YouTube';
+                });
+        } else if (source === 'sc') {
+            // SoundCloud — fetch info via oEmbed
+            fetch('https://soundcloud.com/oembed?url=' + encodeURIComponent(ref) + '&format=json')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var thumbUrl = data.thumbnail_url || '';
+                    setResult(data.title || 'SoundCloud', data.author_name || '', thumbUrl, 'SoundCloud');
+                })
+                .catch(function() {
+                    // Fallback via noembed
+                    fetch('https://noembed.com/embed?url=' + encodeURIComponent(ref))
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            var thumbUrl = data.thumbnail_url || '';
+                            setResult(data.title || 'SoundCloud', data.author_name || '', thumbUrl, 'SoundCloud');
+                        })
+                        .catch(function() {
+                            document.getElementById('songTitle').textContent = 'SoundCloud';
+                        });
+                });
+        }
+    </script>
+</body>
+</html>
