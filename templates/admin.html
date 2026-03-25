@@ -460,6 +460,70 @@
 
     <div class="main">
 
+        <!-- GAMES LIST -->
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#128190;</span>
+                <h3>Мои игры</h3>
+            </div>
+            <div class="card-body">
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                    {% for g in games %}
+                    <div style="display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid {{ 'var(--accent)' if g.name == active_game else 'var(--border)' }}; border-radius:var(--radius); padding:10px 16px;">
+                        <span style="font-weight:700; color:{{ 'var(--accent)' if g.name == active_game else 'var(--text)' }};">{{ g.name }}</span>
+                        {% if g.has_session %}<span style="font-size:11px; color:var(--amber);">сессия</span>{% endif %}
+                        {% if g.name != active_game %}
+                        <form method="post" action="{{ url_for('admin_load_game') }}" style="margin:0;">
+                            <input type="hidden" name="name" value="{{ g.name }}">
+                            <button type="submit" class="config-btn" style="padding:6px 12px; font-size:12px;">Открыть</button>
+                        </form>
+                        {% else %}
+                        <span style="font-size:11px; color:var(--green);">активна</span>
+                        {% endif %}
+                        <form method="post" action="{{ url_for('admin_delete_game') }}" style="margin:0;" onsubmit="return confirm('Удалить {{ g.name }}?')">
+                            <input type="hidden" name="name" value="{{ g.name }}">
+                            <button type="submit" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;">&times;</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                    {% if not games %}
+                    <span style="color:var(--text-dim);">Нет игр</span>
+                    {% endif %}
+                </div>
+                <form method="post" action="{{ url_for('admin_create_game') }}" style="display:flex; gap:10px; align-items:flex-end;">
+                    <div class="config-field" style="flex:1;">
+                        <label>Новая игра</label>
+                        <input type="text" name="name" placeholder="Название..." required>
+                    </div>
+                    <button type="submit" class="config-btn">Создать</button>
+                </form>
+            </div>
+        </div>
+
+        {% if active_game %}
+        <!-- LAUNCH -->
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#9654;</span>
+                <h3>Запуск — {{ active_game }}</h3>
+            </div>
+            <div class="card-body">
+                <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <form method="post" action="{{ url_for('admin_launch') }}">
+                        <input type="hidden" name="mode" value="classic">
+                        <button type="submit" class="config-btn" style="background:var(--green); padding:14px 32px; font-size:16px;">Классический режим</button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin_launch') }}">
+                        <input type="hidden" name="mode" value="buzzer">
+                        <button type="submit" class="config-btn" style="background:var(--amber); color:#0a0a0f; padding:14px 32px; font-size:16px;">Баззер режим</button>
+                    </form>
+                </div>
+                {% if active_mode %}
+                <p style="margin-top:12px; color:var(--text-dim);">Текущий режим: <strong style="color:var(--text);">{{ 'Классический' if active_mode == 'classic' else 'Баззер' }}</strong></p>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Grid config -->
         <div class="card">
             <div class="card-head">
@@ -534,11 +598,11 @@
                 <form method="post" action="{{ url_for('admin_set_timers') }}">
                     <div class="config-row">
                         <div class="config-field">
-                            <label>Время проигрывания аудио (сек)</label>
+                            <label>Время проигрывания аудио, сек (классический режим)</label>
                             <input type="number" name="play_duration" value="{{ play_duration }}" min="5" max="300">
                         </div>
                         <div class="config-field">
-                            <label>Время на ответ (сек)</label>
+                            <label>Время на ответ, сек (оба режима)</label>
                             <input type="number" name="guess_duration" value="{{ guess_duration }}" min="5" max="300">
                         </div>
                         <button type="submit" class="config-btn">Сохранить</button>
@@ -553,12 +617,15 @@
                 <span class="icon">&#9888;</span>
                 <h3>Управление</h3>
             </div>
-            <div class="card-body">
-                <form method="post" action="{{ url_for('admin_reset_game') }}" onsubmit="return confirm('Сбросить игру? Счёт и прогресс обнулятся.')">
-                    <button type="submit" class="danger-btn">Сбросить игру</button>
+            <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap;">
+                <form method="post" action="{{ url_for('admin_reset_session') }}" onsubmit="return confirm('Сбросить сессию? Счёт и прогресс обнулятся.')">
+                    <button type="submit" class="danger-btn">Сбросить сессию</button>
                 </form>
+                <a href="{{ url_for('download_game_file') }}" class="config-btn" style="text-decoration:none;">Скачать игру</a>
+                <a href="{{ url_for('download_session_file') }}" class="config-btn" style="text-decoration:none;">Скачать сессию</a>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Modal -->

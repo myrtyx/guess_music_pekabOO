@@ -65,10 +65,10 @@
         /* === VOLUME CONTROL === */
         .volume-control {
             position: fixed;
-            top: 12px;
+            top: 60px;
             right: 24px;
             z-index: 150;
-            display: none;
+            display: flex;
             align-items: center;
             gap: 8px;
             background: rgba(19, 19, 26, 0.9);
@@ -77,7 +77,6 @@
             border-radius: 50px;
             padding: 8px 16px;
         }
-        .volume-control.visible { display: flex; }
         .vol-icon { font-size: 18px; cursor: pointer; user-select: none; width: 24px; text-align: center; }
         .vol-slider {
             -webkit-appearance: none; appearance: none;
@@ -371,23 +370,69 @@
         }
         .buzzer-winner strong { color: var(--accent); }
 
-        .judge-buttons { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+        .judge-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
         .judge-btn {
-            padding: 24px 48px; border: none; border-radius: 16px;
-            font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700;
-            cursor: pointer; transition: all 0.2s; min-width: 200px;
+            padding: 20px 36px; border: none; border-radius: 16px;
+            font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; min-width: 160px;
         }
         .judge-btn:hover { transform: translateY(-3px); }
-        .judge-correct {
+        .judge-full {
             background: var(--green); color: #0a0a0f;
             box-shadow: 0 4px 24px var(--green-glow);
         }
-        .judge-correct:hover { box-shadow: 0 8px 40px var(--green-glow); }
+        .judge-full:hover { box-shadow: 0 8px 40px var(--green-glow); }
+        .judge-half {
+            background: var(--amber); color: #0a0a0f;
+            box-shadow: 0 4px 24px var(--amber-glow);
+        }
+        .judge-half:hover { box-shadow: 0 8px 40px var(--amber-glow); }
         .judge-wrong {
             background: var(--red); color: #fff;
             box-shadow: 0 4px 24px var(--red-glow);
         }
         .judge-wrong:hover { box-shadow: 0 8px 40px var(--red-glow); }
+        .judge-skip {
+            background: var(--surface-2); color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+        .judge-skip:hover { background: var(--border); color: var(--text); }
+
+        /* ============================ */
+        /* === REVEAL PHASE =========== */
+        /* ============================ */
+        .reveal-center { text-align: center; padding: 48px 0; }
+        .reveal-thumbnail {
+            width: 100%; max-width: 480px; border-radius: 16px;
+            overflow: hidden; margin: 0 auto 24px;
+            box-shadow: 0 16px 60px rgba(0,0,0,0.6), 0 0 40px var(--accent-glow);
+        }
+        .reveal-thumbnail img {
+            width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover;
+        }
+        .reveal-song-title {
+            font-size: clamp(24px, 5vw, 38px); font-weight: 800;
+            margin-bottom: 8px; animation: fade-up 0.6s ease-out;
+        }
+        .reveal-song-artist {
+            font-size: clamp(16px, 3vw, 22px); font-weight: 400;
+            color: var(--accent); margin-bottom: 12px; animation: fade-up 0.6s ease-out 0.1s both;
+        }
+        .reveal-winner-info {
+            font-size: 18px; color: var(--green); font-weight: 700;
+            margin-bottom: 16px; animation: fade-up 0.6s ease-out 0.2s both;
+        }
+
+        /* === END GAME BUTTON === */
+        .end-game-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 12px 28px; margin-top: 20px;
+            border: 1px solid var(--red); border-radius: 50px;
+            background: rgba(239, 68, 68, 0.1); color: var(--red);
+            font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .end-game-btn:hover { background: var(--red); color: #fff; }
 
         /* ============================ */
         /* === RESULT FLASH =========== */
@@ -472,7 +517,8 @@
     <nav>
         <span class="logo">pekabOO</span>
         <div class="nav-links">
-            <a href="/">&#8592; Главная</a>
+            <a href="{{ url_for('admin') }}">Админка</a>
+            <a href="/">Главная</a>
         </div>
     </nav>
 
@@ -522,6 +568,9 @@
             <div class="board-layout">
                 <div>
                     <div class="board" id="gameBoard"></div>
+                    <div style="text-align:center;">
+                        <button class="end-game-btn" onclick="endGame()">Завершить игру</button>
+                    </div>
                 </div>
                 <div class="leaderboard" id="leaderboard">
                     <h3>Счет</h3>
@@ -529,40 +578,33 @@
             </div>
         </div>
 
-        <!-- ============ PLAYING PHASE ============ -->
-        <div class="phase" id="phasePlaying">
-            <div class="playing-center">
-                <div class="cell-badge">
-                    <span class="cat" id="playingCategory"></span>
-                    <span class="pts" id="playingPoints"></span>
-                </div>
-                <div class="timer-display timer-green" id="playingTimer">0</div>
-                <div class="yt-hidden"><div id="yt-player"></div></div>
-                <div id="scContainer" style="position:fixed;left:-9999px;top:0;width:300px;height:166px;overflow:hidden;">
-                    <iframe id="sc-widget" width="300" height="166" scrolling="no" frameborder="no" allow="autoplay" src=""></iframe>
-                </div>
-                <div class="player-box" id="playerBox" style="display:none;">
-                    <button class="play-btn" id="playPauseBtn" onclick="togglePlay()">&#9654;</button>
-                    <span class="player-time" id="currentTime">0:00</span>
-                    <div class="progress-track" id="progressBar" onclick="seekTo(event)">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <span class="player-time" id="duration">0:00</span>
-                </div>
-                <button class="open-buzzer-btn" id="openBuzzerBtn" onclick="openBuzzerEarly()">Открыть баззер</button>
-                <button class="open-buzzer-btn" id="pauseBtn" onclick="socket.emit('pause_game')" style="background:var(--amber);color:#0a0a0f;">Пауза</button>
+        <!-- Music infrastructure (outside phases so audio persists) -->
+        <div class="yt-hidden"><div id="yt-player"></div></div>
+        <div id="scContainer" style="position:fixed;left:-9999px;top:0;width:300px;height:166px;overflow:hidden;">
+            <iframe id="sc-widget" width="300" height="166" scrolling="no" frameborder="no" allow="autoplay" src=""></iframe>
+        </div>
+        <div class="player-box" id="playerBox" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:150;">
+            <button class="play-btn" id="playPauseBtn" onclick="togglePlay()">&#9654;</button>
+            <span class="player-time" id="currentTime">0:00</span>
+            <div class="progress-track" id="progressBar" onclick="seekTo(event)">
+                <div class="progress-fill" id="progressFill"></div>
             </div>
+            <span class="player-time" id="duration">0:00</span>
         </div>
 
-        <!-- ============ BUZZING PHASE ============ -->
+        <!-- ============ BUZZING PHASE (music + buzzer combined) ============ -->
         <div class="phase" id="phaseBuzzing">
-            <div class="buzzing-center">
+            <div class="playing-center">
                 <div class="cell-badge">
                     <span class="cat" id="buzzingCategory"></span>
                     <span class="pts" id="buzzingPoints"></span>
                 </div>
-                <div class="buzzer-open-text">БАЗЗЕР ОТКРЫТ!</div>
-                <div class="timer-display timer-amber" id="buzzingTimer">0</div>
+                <div id="buzzStatusText" style="font-size:clamp(24px,5vw,42px); margin-bottom:8px; font-weight:800; color:var(--green);">Слушайте...</div>
+                <div class="timer-display timer-green" id="buzzingTimer">0</div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:12px;">
+                    <button class="open-buzzer-btn" id="openBuzzerBtn" onclick="openBuzzerEarly()" style="display:none;">Открыть баззер</button>
+                    <button class="open-buzzer-btn" id="pauseBtn" onclick="socket.emit('pause_game')" style="background:var(--amber);color:#0a0a0f;">Пауза</button>
+                </div>
             </div>
         </div>
 
@@ -571,9 +613,23 @@
             <div class="judging-center">
                 <div class="buzzer-winner" id="buzzerWinner"></div>
                 <div class="judge-buttons">
-                    <button class="judge-btn judge-correct" onclick="judge(true)">Верно</button>
-                    <button class="judge-btn judge-wrong" onclick="judge(false)">Неверно</button>
+                    <button class="judge-btn judge-full" onclick="judge('full')">Все баллы</button>
+                    <button class="judge-btn judge-half" onclick="judge('half')">Половина</button>
+                    <button class="judge-btn judge-wrong" onclick="judge('wrong')">Не угадали</button>
+                    <button class="judge-btn judge-skip" onclick="judge('skip')">Пропустить</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- ============ REVEAL PHASE ============ -->
+        <div class="phase" id="phaseReveal">
+            <div class="reveal-center">
+                <div class="reveal-winner-info" id="revealWinnerInfo"></div>
+                <div class="reveal-thumbnail" id="revealThumbContainer" style="display:none;">
+                    <img id="revealThumb" src="" onerror="this.parentElement.style.display='none';">
+                </div>
+                <div class="reveal-song-title" id="revealSongTitle">Загрузка...</div>
+                <div class="reveal-song-artist" id="revealSongArtist"></div>
             </div>
         </div>
 
@@ -596,6 +652,13 @@
                 <div class="final-list" id="finalList"></div>
             </div>
         </div>
+    </div>
+
+    <!-- Pause overlay -->
+    <div id="pauseOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center; flex-direction:column; gap:24px;">
+        <div style="font-family:'Outfit',sans-serif; font-size:clamp(36px,8vw,64px); font-weight:800; color:var(--amber);">ПАУЗА</div>
+        <div style="font-size:18px; color:var(--text-dim);">Игра приостановлена</div>
+        <button onclick="socket.emit('resume_game')" style="padding:16px 48px; border:none; border-radius:50px; background:var(--green); color:#0a0a0f; font-family:'Outfit',sans-serif; font-size:20px; font-weight:700; cursor:pointer; box-shadow:0 4px 20px rgba(34,197,94,0.3);">Продолжить</button>
     </div>
 
     <script>
@@ -666,18 +729,61 @@
            =================================================== */
         document.getElementById('connectUrl').textContent = window.location.host + '/play';
 
+        var urlRoomCode = '{{ room_code or "" }}';
+
         socket.on('connect', function() {
-            console.log('Socket connected! SID:', socket.id);
-            if (!roomCode) {
-                console.log('Emitting create_room...');
+            if (urlRoomCode) {
+                // URL has a specific room code — join it directly
+                socket.emit('rejoin_room', {code: urlRoomCode});
+            } else {
+                socket.emit('check_room');
+            }
+        });
+
+        socket.on('active_room_found', function(data) {
+            var msg = 'Найдена активная комната ' + data.code + ' (' + data.player_count + ' игроков). Продолжить?';
+            if (confirm(msg)) {
+                socket.emit('rejoin_room');
+            } else {
                 socket.emit('create_room');
             }
         });
 
+        socket.on('no_active_room', function() {
+            socket.emit('create_room');
+        });
+
+        // Auto-pause when host closes/navigates away
+        window.addEventListener('beforeunload', function() {
+            if (roomCode) {
+                socket.emit('pause_game');
+            }
+        });
+
         socket.on('room_created', function(data) {
-            console.log('room_created received:', data);
             roomCode = data.code;
             document.getElementById('roomCode').textContent = roomCode;
+            // Update URL to include room code (without page reload)
+            if (window.history.replaceState) {
+                window.history.replaceState(null, '', '/host/' + roomCode);
+            }
+
+            // If rejoining mid-game, restore state
+            if (data.rejoined && data.state !== 'lobby') {
+                if (data.scores) {
+                    players = {};
+                    data.scores.forEach(function(p) {
+                        players[p.name] = { name: p.name, score: p.score, connected: p.connected };
+                    });
+                }
+                if (data.board) {
+                    boardData = data.board;
+                    categories = data.genres || [];
+                    pointsList = data.points || [];
+                    parseBoard();
+                }
+                goToBoard(data.picker || null);
+            }
         });
 
         socket.on('error', function(data) {
@@ -888,79 +994,114 @@
         });
 
         // Pause/Resume
+        var pausedPhase = null;
+
         socket.on('game_paused', function() {
             clearAllTimers();
+            // Pause music
+            if (currentMusicType === 'youtube' && ytPlayer) {
+                try { ytPlayer.pauseVideo(); } catch(e) {}
+            } else if (currentMusicType === 'soundcloud' && scWidget) {
+                try { scWidget.pause(); } catch(e) {}
+            }
+            isPlaying = false;
+            updatePlayBtn();
+
+            // Remember current phase, show pause overlay
+            var phases = document.querySelectorAll('.phase.active');
+            if (phases.length) pausedPhase = phases[0].id;
+
+            // Show a pause overlay on top of everything
+            var overlay = document.getElementById('pauseOverlay');
+            if (overlay) overlay.style.display = 'flex';
+
             document.getElementById('pauseBtn').textContent = 'Продолжить';
             document.getElementById('pauseBtn').onclick = function() { socket.emit('resume_game'); };
         });
 
         socket.on('game_resumed', function(data) {
+            // Hide pause overlay
+            var overlay = document.getElementById('pauseOverlay');
+            if (overlay) overlay.style.display = 'none';
+
+            // Resume music if it was playing
+            if (data.state === 'playing' || data.state === 'buzzing') {
+                if (currentMusicType === 'youtube' && ytPlayer) {
+                    try { ytPlayer.playVideo(); } catch(e) {}
+                } else if (currentMusicType === 'soundcloud' && scWidget) {
+                    try { scWidget.play(); } catch(e) {}
+                }
+                isPlaying = true;
+                updatePlayBtn();
+                startProgressUpdate(currentMusicType === 'youtube' ? ytProgress : scProgress);
+            }
+
             document.getElementById('pauseBtn').textContent = 'Пауза';
             document.getElementById('pauseBtn').onclick = function() { socket.emit('pause_game'); };
         });
 
         /* ===================================================
-           PLAYING PHASE (round_start)
+           ROUND START — music plays AND buzzer opens immediately
            =================================================== */
+        var savedGuessDuration = 30;
+
         socket.on('round_start', function(data) {
             clearAllTimers();
             currentCategory = data.category || '';
             currentPoints = data.pts || 0;
             var music = data.music || {};
-            var playDuration = data.play_duration || 30;
-            var guessDuration = data.guess_duration || 15;
-
-            // Store guess duration for buzzer phase
-            window._guessDuration = guessDuration;
-
-            document.getElementById('playingCategory').textContent = currentCategory;
-            document.getElementById('playingPoints').textContent = currentPoints;
-
-            // Mark cell as used on board
-            var key = currentCategory + '|' + currentPoints;
-            if (boardData[key]) boardData[key].state = 'used';
-
-            showPhase('phasePlaying');
-            document.getElementById('volumeControl').classList.add('visible');
-            document.getElementById('openBuzzerBtn').style.display = '';
-
-            // Start music
-            startMusic(music);
-
-            // Timer
-            var timeLeft = playDuration;
-            var total = playDuration;
-            document.getElementById('playingTimer').textContent = timeLeft;
-            document.getElementById('playingTimer').className = 'timer-display ' + timerTextClass(timeLeft, total);
-            updateTimerBar(timeLeft, total);
-
-            playTimerInterval = setInterval(function() {
-                timeLeft--;
-                if (timeLeft < 0) timeLeft = 0;
-                document.getElementById('playingTimer').textContent = timeLeft;
-                document.getElementById('playingTimer').className = 'timer-display ' + timerTextClass(timeLeft, total);
-                updateTimerBar(timeLeft, total);
-                if (timeLeft <= 0) clearInterval(playTimerInterval);
-            }, 1000);
-        });
-
-        function openBuzzerEarly() {
-            socket.emit('open_buzzer_early');
-            document.getElementById('openBuzzerBtn').style.display = 'none';
-        }
-
-        /* ===================================================
-           BUZZING PHASE
-           =================================================== */
-        socket.on('buzzer_open', function(data) {
-            clearAllTimers();
-            var guessDuration = data.guess_duration || window._guessDuration || 15;
+            savedGuessDuration = data.guess_duration || 30;
 
             document.getElementById('buzzingCategory').textContent = currentCategory;
             document.getElementById('buzzingPoints').textContent = currentPoints;
 
-            showPhase('phaseBuzzing');
+            var key = currentCategory + '|' + currentPoints;
+            if (boardData[key]) boardData[key].state = 'used';
 
+            showPhase('phaseBuzzing');
+            // volume control always visible
+
+            // Start music
+            startMusic(music);
+
+            if (data.buzzer_open) {
+                // Buzzer already open — start guess timer directly
+                startGuessTimer(savedGuessDuration);
+                document.getElementById('openBuzzerBtn').style.display = 'none';
+                document.getElementById('buzzStatusText').textContent = 'БАЗЗЕР ОТКРЫТ';
+            } else {
+                // Playing phase — show 15s countdown to auto-open + manual button
+                document.getElementById('openBuzzerBtn').style.display = '';
+                document.getElementById('buzzStatusText').textContent = 'Слушайте...';
+                var autoOpen = 15;
+                document.getElementById('buzzingTimer').textContent = autoOpen;
+                document.getElementById('buzzingTimer').className = 'timer-display timer-green';
+                updateTimerBar(autoOpen, 15);
+
+                playTimerInterval = setInterval(function() {
+                    autoOpen--;
+                    if (autoOpen < 0) autoOpen = 0;
+                    document.getElementById('buzzingTimer').textContent = autoOpen;
+                    document.getElementById('buzzingTimer').className = 'timer-display ' + timerTextClass(autoOpen, 15);
+                    updateTimerBar(autoOpen, 15);
+                    if (autoOpen <= 0) clearInterval(playTimerInterval);
+                }, 1000);
+            }
+        });
+
+        socket.on('buzzer_open', function(data) {
+            clearAllTimers();
+            document.getElementById('openBuzzerBtn').style.display = 'none';
+            document.getElementById('buzzStatusText').textContent = 'БАЗЗЕР ОТКРЫТ';
+            var guessDur = data.guess_duration || savedGuessDuration;
+            startGuessTimer(guessDur);
+        });
+
+        function openBuzzerEarly() {
+            socket.emit('open_buzzer_early');
+        }
+
+        function startGuessTimer(guessDuration) {
             var timeLeft = guessDuration;
             var total = guessDuration;
             document.getElementById('buzzingTimer').textContent = timeLeft;
@@ -975,20 +1116,64 @@
                 updateTimerBar(timeLeft, total);
                 if (timeLeft <= 0) clearInterval(buzzTimerInterval);
             }, 1000);
-        });
+        }
 
         /* ===================================================
            JUDGING PHASE
            =================================================== */
+        var answerTimerInterval = null;
+
         socket.on('first_buzz', function(data) {
             clearAllTimers();
+            if (answerTimerInterval) { clearInterval(answerTimerInterval); answerTimerInterval = null; }
+
+            // Pause music
+            if (currentMusicType === 'youtube' && ytPlayer) {
+                try { ytPlayer.pauseVideo(); } catch(e) {}
+            } else if (currentMusicType === 'soundcloud' && scWidget) {
+                try { scWidget.pause(); } catch(e) {}
+            }
+            isPlaying = false;
+            updatePlayBtn();
+
             showPhase('phaseJudging');
+
             var name = data.name || data.player || '???';
+            var answerDur = data.answer_duration || 20;
             document.getElementById('buzzerWinner').innerHTML = '<strong>' + escHtml(name) + '</strong> нажал первым!';
+
+            // 20s answer timer
+            var answerLeft = answerDur;
+            document.getElementById('buzzingTimer').textContent = answerLeft;
+            document.getElementById('buzzingTimer').className = 'timer-display timer-green';
+            updateTimerBar(answerLeft, answerDur);
+
+            answerTimerInterval = setInterval(function() {
+                answerLeft--;
+                if (answerLeft < 0) answerLeft = 0;
+                document.getElementById('buzzingTimer').textContent = answerLeft;
+                document.getElementById('buzzingTimer').className = 'timer-display ' + timerTextClass(answerLeft, answerDur);
+                updateTimerBar(answerLeft, answerDur);
+                if (answerLeft <= 0) clearInterval(answerTimerInterval);
+            }, 1000);
         });
 
-        function judge(correct) {
-            socket.emit('judge', { correct: correct });
+        // Answer timeout — server says time's up for this player
+        socket.on('answer_timeout', function(data) {
+            if (answerTimerInterval) { clearInterval(answerTimerInterval); answerTimerInterval = null; }
+            // Auto-judge as wrong
+            judge('wrong');
+        });
+
+        function judge(result) {
+            if (answerTimerInterval) { clearInterval(answerTimerInterval); answerTimerInterval = null; }
+            socket.emit('judge', { result: result });
+        }
+
+        function endGame() {
+            if (confirm('Завершить игру? Будут показаны финальные результаты.')) {
+                socket.emit('end_game');
+            }
         }
 
         /* ===================================================
@@ -1015,9 +1200,24 @@
             document.getElementById('resultText').textContent = escHtml(name) + ' -' + penalty + ' очков';
             document.getElementById('revealInfo').style.display = 'none';
 
-            // Return to buzzing after a moment
+            // Return to buzzing after a moment, resume music
             setTimeout(function() {
                 showPhase('phaseBuzzing');
+                document.getElementById('openBuzzerBtn').style.display = 'none';
+                document.getElementById('buzzStatusText').textContent = 'БАЗЗЕР ОТКРЫТ';
+                // Resume guess timer from server remaining time
+                if (data.guess_remaining) {
+                    startGuessTimer(data.guess_remaining);
+                }
+                // Resume music
+                if (currentMusicType === 'youtube' && ytPlayer) {
+                    try { ytPlayer.playVideo(); } catch(e) {}
+                } else if (currentMusicType === 'soundcloud' && scWidget) {
+                    try { scWidget.play(); } catch(e) {}
+                }
+                isPlaying = true;
+                updatePlayBtn();
+                startProgressUpdate(currentMusicType === 'youtube' ? ytProgress : scProgress);
             }, 1500);
         });
 
@@ -1027,7 +1227,7 @@
         socket.on('round_result', function(data) {
             clearAllTimers();
             destroyMusic();
-            document.getElementById('volumeControl').classList.remove('visible');
+            // volume control always visible
 
             // Update scores
             if (data.scores) {
@@ -1051,33 +1251,140 @@
                 if (boardData[key]) boardData[key].state = 'used';
             }
 
+            var resultType = data.result || (data.correct ? 'full' : 'wrong');
+
+            // For correct answers (full/half), show reveal screen with song info
+            if (resultType === 'full' || resultType === 'half') {
+                var winnerName = data.name || '???';
+                var awarded = data.points_change || 0;
+                showRevealScreen(data.music, winnerName, awarded, data.picker);
+                return;
+            }
+
+            // For skip result
+            if (resultType === 'skip') {
+                showPhase('phaseResult');
+                document.getElementById('resultText').className = 'result-text result-neutral';
+                document.getElementById('resultText').textContent = 'Пропущено';
+                document.getElementById('revealInfo').style.display = 'none';
+                setTimeout(function() {
+                    goToBoard(data.picker || null);
+                }, 2000);
+                return;
+            }
+
+            // For wrong (all locked) result
             showPhase('phaseResult');
 
             if (data.all_locked || data.no_winner) {
                 document.getElementById('resultText').className = 'result-text result-neutral';
                 document.getElementById('resultText').textContent = 'Никто не угадал';
-            } else if (data.winner || data.name) {
-                var winnerName = data.winner || data.name || '???';
-                var pts = data.pts_awarded || data.pts || currentPoints;
-                document.getElementById('resultText').className = 'result-text result-positive';
-                document.getElementById('resultText').textContent = escHtml(winnerName) + ' +' + pts + ' очков!';
+            } else if (data.name) {
+                var name = data.name || '???';
+                var penalty = Math.abs(data.points_change || 0);
+                document.getElementById('resultText').className = 'result-text result-negative';
+                document.getElementById('resultText').textContent = escHtml(name) + ' -' + penalty + ' очков';
             }
-
-            // Show reveal info if available
-            var reveal = document.getElementById('revealInfo');
-            if (data.reveal) {
-                reveal.style.display = 'inline-block';
-                document.getElementById('revealTitle').textContent = data.reveal.title || '';
-                document.getElementById('revealArtist').textContent = data.reveal.artist || '';
-            } else {
-                reveal.style.display = 'none';
-            }
+            document.getElementById('revealInfo').style.display = 'none';
 
             // Transition to board after delay
             setTimeout(function() {
                 goToBoard(data.picker || null);
-            }, 3500);
+            }, 3000);
         });
+
+        /* ===================================================
+           REVEAL SCREEN (after correct answer)
+           =================================================== */
+        function showRevealScreen(music, winnerName, awarded, picker) {
+            showPhase('phaseReveal');
+
+            document.getElementById('revealWinnerInfo').textContent = escHtml(winnerName) + ' +' + awarded + ' очков!';
+            document.getElementById('revealSongTitle').textContent = 'Загрузка...';
+            document.getElementById('revealSongArtist').textContent = '';
+            document.getElementById('revealThumbContainer').style.display = 'none';
+
+            if (!music) {
+                document.getElementById('revealSongTitle').textContent = 'Музыка не назначена';
+                setTimeout(function() { goToBoard(picker || null); }, 4000);
+                return;
+            }
+
+            function setRevealResult(title, artist, thumbUrl) {
+                // Parse "Artist - Song" from title
+                var songTitle = title;
+                var songArtist = artist || '';
+                var seps = [' - ', ' \u2014 ', ' \u2013 ', ' | '];
+                for (var i = 0; i < seps.length; i++) {
+                    if (title.indexOf(seps[i]) !== -1) {
+                        var parts = title.split(seps[i]);
+                        songArtist = parts[0].trim();
+                        songTitle = parts.slice(1).join(seps[i]).trim();
+                        break;
+                    }
+                }
+                songTitle = songTitle
+                    .replace(/\s*\(Official.*?\)/gi, '')
+                    .replace(/\s*\[Official.*?\]/gi, '')
+                    .replace(/\s*\(Lyrics.*?\)/gi, '')
+                    .replace(/\s*\[Lyrics.*?\]/gi, '')
+                    .replace(/\s*\(Audio.*?\)/gi, '')
+                    .replace(/\s*\[Audio.*?\]/gi, '')
+                    .replace(/\s*\(Music Video\)/gi, '')
+                    .replace(/\s*\[Music Video\]/gi, '')
+                    .replace(/\s*\(HD\)/gi, '')
+                    .replace(/\s*\[HD\]/gi, '')
+                    .trim();
+
+                document.getElementById('revealSongTitle').textContent = songTitle;
+                document.getElementById('revealSongArtist').textContent = songArtist;
+
+                if (thumbUrl) {
+                    document.getElementById('revealThumb').src = thumbUrl;
+                    document.getElementById('revealThumbContainer').style.display = 'block';
+                }
+            }
+
+            if (music.type === 'youtube' && music.video_id) {
+                // Set thumbnail immediately
+                var ytThumb = 'https://img.youtube.com/vi/' + music.video_id + '/hqdefault.jpg';
+                document.getElementById('revealThumb').src = ytThumb;
+                document.getElementById('revealThumbContainer').style.display = 'block';
+
+                // Fetch title via oEmbed
+                fetch('https://noembed.com/embed?url=https://www.youtube.com/watch?v=' + music.video_id)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        setRevealResult(data.title || music.video_id, data.author_name || '', null);
+                    })
+                    .catch(function() {
+                        document.getElementById('revealSongTitle').textContent = 'YouTube';
+                    });
+            } else if (music.type === 'soundcloud' && music.sc_url) {
+                fetch('https://soundcloud.com/oembed?url=' + encodeURIComponent(music.sc_url) + '&format=json')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        setRevealResult(data.title || 'SoundCloud', data.author_name || '', data.thumbnail_url || '');
+                    })
+                    .catch(function() {
+                        fetch('https://noembed.com/embed?url=' + encodeURIComponent(music.sc_url))
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                setRevealResult(data.title || 'SoundCloud', data.author_name || '', data.thumbnail_url || '');
+                            })
+                            .catch(function() {
+                                document.getElementById('revealSongTitle').textContent = 'SoundCloud';
+                            });
+                    });
+            } else {
+                document.getElementById('revealSongTitle').textContent = 'Музыка не назначена';
+            }
+
+            // Auto-transition to board after 4 seconds
+            setTimeout(function() {
+                goToBoard(picker || null);
+            }, 4000);
+        }
 
         /* ===================================================
            TIME UP
@@ -1118,7 +1425,7 @@
         socket.on('game_over', function(data) {
             clearAllTimers();
             destroyMusic();
-            document.getElementById('volumeControl').classList.remove('visible');
+            // volume control always visible
             showPhase('phaseGameOver');
 
             // Update final scores
@@ -1174,8 +1481,11 @@
         var scWidget = null;
         var isPlaying = false;
         var progressInterval = null;
-        var currentVolume = 80;
+        var currentVolume = parseInt(localStorage.getItem('pekaboo_volume') || '80');
         var isMuted = false;
+        // Set slider to saved value
+        document.getElementById('volSlider').value = currentVolume;
+        updateVolIcon();
 
         function startMusic(music) {
             destroyMusic();
@@ -1241,8 +1551,22 @@
             // Reuse existing player if possible
             if (ytPlayer && ytPlayer.loadVideoById) {
                 try {
+                    // Mute before loading to prevent volume spike
+                    ytPlayer.mute();
                     ytPlayer.loadVideoById({videoId: videoId, startSeconds: startSec || 0});
-                    applyVolumeToYT();
+                    // Unmute and set correct volume after load
+                    setTimeout(function() {
+                        if (!isMuted) { try { ytPlayer.unMute(); } catch(e) {} }
+                        try { ytPlayer.setVolume(currentVolume); } catch(e) {}
+                    }, 300);
+                    setTimeout(function() {
+                        if (!isMuted) { try { ytPlayer.unMute(); } catch(e) {} }
+                        try { ytPlayer.setVolume(currentVolume); } catch(e) {}
+                    }, 1000);
+                    document.getElementById('playerBox').style.display = 'flex';
+                    isPlaying = true;
+                    updatePlayBtn();
+                    startProgressUpdate(ytProgress);
                     return;
                 } catch(e) {
                     // Player is broken, recreate
@@ -1263,7 +1587,13 @@
                         onStateChange: function(e) {
                             isPlaying = (e.data === YT.PlayerState.PLAYING);
                             updatePlayBtn();
-                            if (isPlaying) startProgressUpdate(ytProgress); else stopProgressUpdate();
+                            if (isPlaying) {
+                                // Always enforce volume when playback starts
+                                applyVolumeToYT();
+                                startProgressUpdate(ytProgress);
+                            } else {
+                                stopProgressUpdate();
+                            }
                         }
                     }
                 });
@@ -1272,13 +1602,20 @@
         }
 
         function ytProgress() {
-            if (!ytPlayer || !ytPlayer.getDuration) return;
-            var cur = ytPlayer.getCurrentTime(), tot = ytPlayer.getDuration();
-            if (tot > 0) {
-                document.getElementById('currentTime').textContent = formatTime(cur);
-                document.getElementById('duration').textContent = formatTime(tot);
-                document.getElementById('progressFill').style.width = (cur / tot * 100) + '%';
-            }
+            if (!ytPlayer) return;
+            try {
+                var cur = ytPlayer.getCurrentTime() || 0;
+                var tot = ytPlayer.getDuration() || 0;
+                if (tot > 0) {
+                    document.getElementById('currentTime').textContent = formatTime(cur);
+                    document.getElementById('duration').textContent = formatTime(tot);
+                    document.getElementById('progressFill').style.width = (cur / tot * 100) + '%';
+                }
+                // Update play button state
+                var state = ytPlayer.getPlayerState();
+                isPlaying = (state === 1); // YT.PlayerState.PLAYING
+                updatePlayBtn();
+            } catch(e) {}
         }
 
         /* SoundCloud */
@@ -1360,6 +1697,7 @@
         function changeVolume(val) {
             currentVolume = parseInt(val);
             isMuted = currentVolume === 0;
+            localStorage.setItem('pekaboo_volume', currentVolume);
             updateVolIcon();
             applyVolume();
         }

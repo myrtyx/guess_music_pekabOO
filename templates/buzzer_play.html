@@ -786,6 +786,9 @@
 
 <!-- Flash overlay for result effects -->
 <div class="flash-overlay" id="flash-overlay"></div>
+<div id="pauseOverlayPlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); align-items:center; justify-content:center; flex-direction:column;">
+    <div style="font-family:'Outfit',sans-serif; font-size:clamp(28px,8vw,48px); font-weight:800; color:#f59e0b;">ПАУЗА</div>
+</div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
@@ -1065,20 +1068,27 @@
     });
 
     socket.on('game_paused', function() {
-        // Just show a visual indicator, keep current phase
+        document.getElementById('pauseOverlayPlay').style.display = 'flex';
     });
 
     socket.on('game_resumed', function() {
-        // Resume
+        document.getElementById('pauseOverlayPlay').style.display = 'none';
     });
 
-    // === ROUND START (LISTENING) ===
+    // === ROUND START (LISTENING / BUZZING) ===
     socket.on('round_start', function(data) {
         hasBuzzed = false;
         buzzLocked = [];
         document.getElementById('listen-cat').textContent = data.category;
         document.getElementById('listen-pts').textContent = data.pts;
-        showPhase('listen');
+
+        // If buzzer is already open (new simplified timer mode), go straight to buzz
+        if (data.buzzer_open) {
+            guessEndTime = Date.now() + ((data.guess_duration || 30) * 1000);
+            showBuzzPhase();
+        } else {
+            showPhase('listen');
+        }
     });
 
     // === BUZZER OPEN ===
@@ -1169,6 +1179,10 @@
     socket.on('wrong_answer', function(data) {
         currentScores = data.scores;
         buzzLocked = data.locked || [];
+        // Reset guess timer from server remaining time
+        if (data.guess_remaining) {
+            guessEndTime = Date.now() + (data.guess_remaining * 1000);
+        }
 
         // Show brief result flash
         if (data.name === myName) {
@@ -1193,7 +1207,11 @@
         currentScores = data.scores;
         if (data.board) boardData = data.board;
 
-        if (data.name === myName) {
+        var resultType = data.result || (data.correct ? 'full' : 'wrong');
+
+        if (resultType === 'skip') {
+            showResultFlash('Пропущено', null, false);
+        } else if (data.name === myName) {
             if (data.correct) {
                 showResultFlash('Верно!', '+' + data.points_change, true);
             } else {

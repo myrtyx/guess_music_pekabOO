@@ -13,20 +13,20 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
 
-GAME_FILE = 'game.json'       # Настройки игры: жанры, очки, музыка, таймеры
-SESSION_FILE = 'session.json'  # Прогресс сессии: команды, доска, текущий ход
-
+GAMES_DIR = 'games'
 DEFAULT_GENRES = ['TikTok', 'Eurovision', '2k17', 'Minus']
 DEFAULT_POINTS = [100, 200, 300, 400, 500]
 
-# ==================== GAME CONFIG (game.json) ====================
+# ==================== ACTIVE GAME STATE ====================
+active_game_name = None   # name of loaded game (without .json)
+active_mode = None        # 'classic' | 'buzzer' | None
 genres = list(DEFAULT_GENRES)
 points = list(DEFAULT_POINTS)
 music_mapping = {}
 play_duration = 30
 guess_duration = 30
 
-# ==================== SESSION STATE (session.json) ====================
+# ==================== SESSION STATE ====================
 teams = []
 board = {}
 current_team = 0
@@ -44,7 +44,34 @@ def _parse_tuple_keys(d):
     return {eval(k): v for k, v in d.items()}
 
 
+def ensure_games_dir():
+    if not os.path.exists(GAMES_DIR):
+        os.makedirs(GAMES_DIR)
+
+
+def game_path(name):
+    return os.path.join(GAMES_DIR, name + '.json')
+
+
+def session_path(name):
+    return os.path.join(GAMES_DIR, name + '_session.json')
+
+
+def list_games():
+    ensure_games_dir()
+    games = []
+    for f in sorted(os.listdir(GAMES_DIR)):
+        if f.endswith('.json') and not f.endswith('_session.json'):
+            name = f[:-5]
+            has_session = os.path.exists(session_path(name))
+            games.append({'name': name, 'has_session': has_session})
+    return games
+
+
 def save_game():
+    if not active_game_name:
+        return
+    ensure_games_dir()
     data = {
         'genres': genres,
         'points': points,
@@ -52,15 +79,16 @@ def save_game():
         'play_duration': play_duration,
         'guess_duration': guess_duration
     }
-    with open(GAME_FILE, 'w', encoding='utf-8') as f:
+    with open(game_path(active_game_name), 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def load_game():
-    global genres, points, music_mapping, play_duration, guess_duration
-    if not os.path.exists(GAME_FILE):
-        return
-    with open(GAME_FILE, 'r', encoding='utf-8') as f:
+def load_game(name):
+    global genres, points, music_mapping, play_duration, guess_duration, active_game_name
+    path = game_path(name)
+    if not os.path.exists(path):
+        return False
+    with open(path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         genres = data.get('genres', list(DEFAULT_GENRES))
         points = data.get('points', list(DEFAULT_POINTS))
@@ -68,69 +96,115 @@ def load_game():
         music_mapping = {k: _migrate_mapping_value(v) for k, v in raw.items()}
         play_duration = data.get('play_duration', 30)
         guess_duration = data.get('guess_duration', 30)
+    active_game_name = name
+    return True
 
 
 def save_session():
+    if not active_game_name:
+        return
     data = {
         'teams': teams,
         'board': {str(k): v for k, v in board.items()},
         'current_team': current_team,
+        'mode': active_mode,
     }
-    with open(SESSION_FILE, 'w', encoding='utf-8') as f:
+    with open(session_path(active_game_name), 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 def load_session():
-    global teams, board, current_team
-    if not os.path.exists(SESSION_FILE):
-        teams = []
-        board = {(cat, pt): {'state': 'unused'} for cat in genres for pt in points}
-        current_team = 0
+    global teams, board, current_team, active_mode
+    if not active_game_name:
         return
-    with open(SESSION_FILE, 'r', encoding='utf-8') as f:
+    path = session_path(active_game_name)
+    if not os.path.exists(path):
+        reset_session()
+        return
+    with open(path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         teams = data.get('teams', [])
         board = _parse_tuple_keys(data.get('board', {}))
         current_team = data.get('current_team', 0)
+        active_mode = data.get('mode', active_mode)
 
 
-def migrate_old_state():
-    """Migrate old game_state.json to new game.json + session.json."""
-    old_file = 'game_state.json'
-    if not os.path.exists(old_file):
-        return
-    with open(old_file, 'r', encoding='utf-8') as f:
-        old = json.load(f)
-    # Write game.json
-    game_data = {
-        'genres': old.get('genres', list(DEFAULT_GENRES)),
-        'points': old.get('points', list(DEFAULT_POINTS)),
-        'music_mapping': old.get('music_mapping', {}),
-        'play_duration': old.get('play_duration', 30),
-        'guess_duration': old.get('guess_duration', 30),
+def reset_session():
+    global teams, board, current_team
+    teams = []
+    board = {(cat, pt): {'state': 'unused'} for cat in genres for pt in points}
+    current_team = 0
+
+
+def create_game(name):
+    ensure_games_dir()
+    path = game_path(name)
+    if os.path.exists(path):
+        return False
+    data = {
+        'genres': list(DEFAULT_GENRES),
+        'points': list(DEFAULT_POINTS),
+        'music_mapping': {},
+        'play_duration': 30,
+        'guess_duration': 30
     }
-    with open(GAME_FILE, 'w', encoding='utf-8') as f:
-        json.dump(game_data, f, ensure_ascii=False, indent=4)
-    # Write session.json
-    session_data = {
-        'teams': old.get('teams', []),
-        'board': old.get('board', {}),
-        'current_team': old.get('current_team', 0),
-    }
-    with open(SESSION_FILE, 'w', encoding='utf-8') as f:
-        json.dump(session_data, f, ensure_ascii=False, indent=4)
-    os.rename(old_file, old_file + '.bak')
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    return True
+
+
+def delete_game(name):
+    path = game_path(name)
+    spath = session_path(name)
+    if os.path.exists(path):
+        os.remove(path)
+    if os.path.exists(spath):
+        os.remove(spath)
+
+
+def migrate_old_files():
+    """Migrate old game.json/session.json/game_state.json to games/ folder."""
+    ensure_games_dir()
+    # Migrate game_state.json
+    if os.path.exists('game_state.json'):
+        with open('game_state.json', 'r', encoding='utf-8') as f:
+            old = json.load(f)
+        game_data = {
+            'genres': old.get('genres', list(DEFAULT_GENRES)),
+            'points': old.get('points', list(DEFAULT_POINTS)),
+            'music_mapping': old.get('music_mapping', {}),
+            'play_duration': old.get('play_duration', 30),
+            'guess_duration': old.get('guess_duration', 30),
+        }
+        with open(game_path('migrated'), 'w', encoding='utf-8') as f:
+            json.dump(game_data, f, ensure_ascii=False, indent=4)
+        session_data = {
+            'teams': old.get('teams', []),
+            'board': old.get('board', {}),
+            'current_team': old.get('current_team', 0),
+        }
+        with open(session_path('migrated'), 'w', encoding='utf-8') as f:
+            json.dump(session_data, f, ensure_ascii=False, indent=4)
+        os.rename('game_state.json', 'game_state.json.bak')
+    # Migrate standalone game.json
+    if os.path.exists('game.json'):
+        import shutil
+        shutil.move('game.json', game_path('migrated'))
+    if os.path.exists('session.json'):
+        import shutil
+        shutil.move('session.json', session_path('migrated'))
 
 
 def init_state():
-    migrate_old_state()
-    load_game()
-    load_session()
-    # Ensure board has all cells from current game config
-    for cat in genres:
-        for pt in points:
-            if (cat, pt) not in board:
-                board[(cat, pt)] = {'state': 'unused'}
+    migrate_old_files()
+    games = list_games()
+    if games:
+        load_game(games[0]['name'])
+        load_session()
+        for cat in genres:
+            for pt in points:
+                if (cat, pt) not in board:
+                    board[(cat, pt)] = {'state': 'unused'}
 
 
 init_state()
@@ -247,8 +321,54 @@ def get_music_for_cell(room, cat, pts):
 
 @app.route('/admin')
 def admin():
-    return render_template('admin.html', genres=genres, points=points, music_mapping=music_mapping,
-                           play_duration=play_duration, guess_duration=guess_duration)
+    return render_template('admin.html',
+                           genres=genres, points=points, music_mapping=music_mapping,
+                           play_duration=play_duration, guess_duration=guess_duration,
+                           games=list_games(), active_game=active_game_name, active_mode=active_mode)
+
+
+@app.route('/admin/create_game', methods=['POST'])
+def admin_create_game():
+    name = request.form.get('name', '').strip()
+    name = ''.join(c for c in name if c.isalnum() or c in '-_ ').strip()
+    if name:
+        create_game(name)
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/load_game', methods=['POST'])
+def admin_load_game():
+    name = request.form.get('name', '').strip()
+    if name and load_game(name):
+        load_session()
+        for cat in genres:
+            for pt in points:
+                if (cat, pt) not in board:
+                    board[(cat, pt)] = {'state': 'unused'}
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/delete_game', methods=['POST'])
+def admin_delete_game():
+    global active_game_name
+    name = request.form.get('name', '').strip()
+    if name:
+        delete_game(name)
+        if active_game_name == name:
+            active_game_name = None
+            reset_session()
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/launch', methods=['POST'])
+def admin_launch():
+    global active_mode
+    mode = request.form.get('mode', 'classic')
+    active_mode = mode
+    save_session()
+    if mode == 'buzzer':
+        return redirect(url_for('buzzer_host'))
+    return redirect(url_for('setup'))
 
 
 @app.route('/admin/set_timers', methods=['POST'])
@@ -310,24 +430,26 @@ def admin_update_grid():
     return redirect(url_for('admin'))
 
 
-@app.route('/admin/reset_game', methods=['POST'])
-def admin_reset_game():
-    global teams, board, current_team
-    teams = []
-    board = {(cat, pt): {'state': 'unused'} for cat in genres for pt in points}
-    current_team = 0
-    save_session()
+@app.route('/admin/reset_session', methods=['POST'])
+def admin_reset_session():
+    reset_session()
+    if active_game_name:
+        save_session()
     return redirect(url_for('admin'))
 
 
-# ==================== MODE SELECT ====================
+# ==================== MAIN / GAME ====================
 
-@app.route('/mode')
-def mode_select():
-    return render_template('mode.html')
+@app.route('/')
+def index():
+    if not active_game_name:
+        return redirect(url_for('admin'))
+    if active_mode == 'buzzer':
+        return redirect(url_for('buzzer_host'))
+    if not teams:
+        return redirect(url_for('setup'))
+    return render_template('index.html', teams=teams, categories=genres, points=points, board=board, current_team=current_team)
 
-
-# ==================== CLASSIC GAME ====================
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
@@ -343,13 +465,6 @@ def setup():
         save_session()
         return redirect(url_for('index'))
     return render_template('setup.html')
-
-
-@app.route('/', methods=['GET'])
-def index():
-    if not teams:
-        return redirect(url_for('mode_select'))
-    return render_template('index.html', teams=teams, categories=genres, points=points, board=board, current_team=current_team)
 
 
 @app.route('/select/<category>/<int:pts>', methods=['GET', 'POST'])
@@ -436,21 +551,31 @@ def use_random():
 
 @app.route('/download/game')
 def download_game_file():
+    if not active_game_name:
+        return redirect(url_for('admin'))
     save_game()
-    return send_file(GAME_FILE, as_attachment=True, download_name='game.json')
+    return send_file(game_path(active_game_name), as_attachment=True,
+                     download_name=active_game_name + '.json')
 
 
 @app.route('/download/session')
 def download_session_file():
+    if not active_game_name:
+        return redirect(url_for('admin'))
     save_session()
-    return send_file(SESSION_FILE, as_attachment=True, download_name='session.json')
+    return send_file(session_path(active_game_name), as_attachment=True,
+                     download_name=active_game_name + '_session.json')
 
 
 # ==================== BUZZER ROUTES ====================
 
+active_buzzer_code = None  # Currently active buzzer room
+
+
 @app.route('/host')
-def buzzer_host():
-    return render_template('buzzer_host.html')
+@app.route('/host/<code>')
+def buzzer_host(code=None):
+    return render_template('buzzer_host.html', room_code=code)
 
 
 @app.route('/play')
@@ -460,15 +585,68 @@ def buzzer_play():
 
 # ==================== BUZZER SOCKET EVENTS ====================
 
+@socketio.on('check_room')
+def handle_check_room(data=None):
+    """Check if there's an active buzzer room the host can rejoin."""
+    global active_buzzer_code
+    if active_buzzer_code and active_buzzer_code in buzzer_rooms:
+        room = buzzer_rooms[active_buzzer_code]
+        emit('active_room_found', {
+            'code': room['code'],
+            'state': room['state'],
+            'player_count': len(room['players']),
+            'scores': room_scores(room),
+            'board': serialize_board(room),
+            'genres': room['genres'],
+            'points': room['points'],
+            'settings': room['settings'],
+        })
+    else:
+        active_buzzer_code = None
+        emit('no_active_room', {})
+
+
+@socketio.on('rejoin_room')
+def handle_rejoin_room(data=None):
+    """Host rejoins an existing room after page refresh."""
+    global active_buzzer_code
+    # Accept specific code from URL or use active
+    code = None
+    if data and isinstance(data, dict):
+        code = data.get('code', '').strip()
+    if not code:
+        code = active_buzzer_code
+    if not code or code not in buzzer_rooms:
+        emit('no_active_room', {})
+        return
+    room = buzzer_rooms[code]
+    active_buzzer_code = code
+    room['host_sid'] = request.sid
+    sio_join_room(room['code'])
+    emit('room_created', {
+        'code': room['code'],
+        'settings': room['settings'],
+        'rejoined': True,
+        'state': room['state'],
+        'scores': room_scores(room),
+        'board': serialize_board(room),
+        'genres': room['genres'],
+        'points': room['points'],
+        'picker': room.get('picker'),
+    })
+
+
 @socketio.on('create_room')
 def handle_create_room(data=None):
-    print(f"[BUZZER] create_room called by {request.sid}", flush=True)
+    global active_buzzer_code
+    # Clean up old room if any
+    if active_buzzer_code and active_buzzer_code in buzzer_rooms:
+        del buzzer_rooms[active_buzzer_code]
     room = create_buzzer_room(request.sid)
     if not room:
-        print("[BUZZER] Failed to create room!", flush=True)
         emit('error', {'msg': 'Не удалось создать комнату'})
         return
-    print(f"[BUZZER] Room created: {room['code']}", flush=True)
+    active_buzzer_code = room['code']
     if data and 'settings' in data:
         s = data['settings']
         if 'max_players' in s:
@@ -574,10 +752,10 @@ def handle_play_cell(data):
 
     room['board'][key]['state'] = 'selected'
     room['current_cell'] = key
-    room['state'] = 'playing'
+    room['state'] = 'buzzing'
     room['buzz_order'] = []
     room['buzz_locked'] = set()
-    room['buzzer_open'] = False
+    room['buzzer_open'] = True
 
     music = get_music_for_cell(room, cat, pts)
     music_data = {}
@@ -588,35 +766,12 @@ def handle_play_cell(data):
     socketio.emit('round_start', {
         'category': cat, 'pts': pts,
         'music': music_data,
-        'play_duration': room['play_duration'],
         'guess_duration': room['guess_duration'],
+        'buzzer_open': True,
     }, room=room['code'])
 
-    # Background task: open buzzer after play_duration
-    socketio.start_background_task(buzzer_open_timer, room['code'], key)
-
-
-def buzzer_open_timer(room_code, cell_key):
-    room = buzzer_rooms.get(room_code)
-    if not room:
-        return
-    # Sleep in 1-second increments so pause can interrupt
-    remaining = room['play_duration']
-    while remaining > 0:
-        socketio.sleep(1)
-        if not buzzer_rooms.get(room_code):
-            return
-        if room.get('current_cell') != cell_key:
-            return
-        if room['state'] == 'paused':
-            continue  # Don't count paused time
-        remaining -= 1
-    if room.get('current_cell') == cell_key and room['state'] == 'playing':
-        room['state'] = 'buzzing'
-        room['buzzer_open'] = True
-        socketio.emit('buzzer_open', {'guess_duration': room['guess_duration']}, room=room_code)
-        # Guess timeout
-        socketio.start_background_task(guess_timeout, room_code, cell_key)
+    # Start guess timeout directly
+    socketio.start_background_task(guess_timeout, room['code'], key)
 
 
 def guess_timeout(room_code, cell_key):
@@ -624,16 +779,18 @@ def guess_timeout(room_code, cell_key):
     if not room:
         return
     remaining = room['guess_duration']
+    room['guess_remaining'] = remaining
     while remaining > 0:
         socketio.sleep(1)
         if not buzzer_rooms.get(room_code):
             return
         if room.get('current_cell') != cell_key:
             return
-        if room['state'] == 'paused':
-            continue
+        if room['state'] in ('paused', 'judging'):
+            continue  # Freeze during pause AND while someone is answering
         remaining -= 1
-    if room.get('current_cell') == cell_key and room['state'] in ('buzzing', 'judging'):
+        room['guess_remaining'] = remaining
+    if room.get('current_cell') == cell_key and room['state'] in ('buzzing',):
         # Time's up — no one gets points
         cat, pts = cell_key
         room['board'][cell_key]['state'] = 'used'
@@ -656,6 +813,28 @@ def guess_timeout(room_code, cell_key):
                 'scores': room_scores(room),
                 'picker': None,
             }, room=room_code)
+
+
+def answer_timeout(room_code, buzzer_name, timer_id):
+    """20s timer for the buzzer player to answer. If expired, auto-wrong."""
+    room = buzzer_rooms.get(room_code)
+    if not room:
+        return
+    remaining = 20
+    while remaining > 0:
+        socketio.sleep(1)
+        if not buzzer_rooms.get(room_code):
+            return
+        if room.get('answer_timer_id') != timer_id:
+            return  # Host already judged
+        if room['state'] == 'paused':
+            continue
+        if room['state'] != 'judging':
+            return  # State changed (host judged)
+        remaining -= 1
+    # Time expired — auto wrong answer
+    if room['state'] == 'judging' and room.get('answer_timer_id') == timer_id:
+        socketio.emit('answer_timeout', {'name': buzzer_name}, room=room_code)
 
 
 @socketio.on('pause_game')
@@ -716,10 +895,14 @@ def handle_buzz(data=None):
         # First buzz!
         room['state'] = 'judging'
         room['buzzer_open'] = False
+        room['answer_timer_id'] = room.get('answer_timer_id', 0) + 1
         socketio.emit('first_buzz', {
             'name': name,
             'buzz_order': room['buzz_order'],
+            'answer_duration': 20,
         }, room=room['code'])
+        # Start 20s answer timer
+        socketio.start_background_task(answer_timeout, room['code'], name, room['answer_timer_id'])
 
 
 @socketio.on('judge')
@@ -730,13 +913,23 @@ def handle_judge(data):
     if room['state'] != 'judging' or not room['buzz_order']:
         return
 
-    correct = data.get('correct', False)
+    # Cancel answer timer
+    room['answer_timer_id'] = room.get('answer_timer_id', 0) + 1
+
+    result = data.get('result', '')
+    # Legacy support: if 'correct' field is sent, map it
+    if not result:
+        if data.get('correct', False):
+            result = 'full'
+        else:
+            result = 'wrong'
+
     buzzer_name = room['buzz_order'][-1]  # Latest buzzer (could be after reopen)
     cat, pts = room['current_cell']
     music = get_music_for_cell(room, cat, pts)
 
-    if correct:
-        room['players'][buzzer_name]['score'] += pts
+    if result == 'skip':
+        # Mark cell as used, no points to anyone, move to picking
         room['board'][(cat, pts)]['state'] = 'used'
         room['current_cell'] = None
         room['buzzer_open'] = False
@@ -745,7 +938,40 @@ def handle_judge(data):
         if not unused:
             room['state'] = 'finished'
             socketio.emit('round_result', {
-                'correct': True, 'name': buzzer_name, 'points_change': pts,
+                'result': 'skip', 'name': buzzer_name, 'points_change': 0,
+                'scores': room_scores(room), 'board': serialize_board(room),
+                'music': music if music else None,
+                'category': cat, 'pts': pts,
+            }, room=room['code'])
+            socketio.emit('game_over', {'scores': room_scores(room)}, room=room['code'])
+        else:
+            room['state'] = 'picking'
+            room['picker'] = None  # Host picks
+            room['pick_timer_id'] += 1
+            socketio.emit('round_result', {
+                'result': 'skip', 'name': buzzer_name, 'points_change': 0,
+                'scores': room_scores(room), 'board': serialize_board(room),
+                'picker': None,
+                'music': music if music else None,
+                'category': cat, 'pts': pts,
+            }, room=room['code'])
+        return
+
+    if result in ('full', 'half'):
+        if result == 'full':
+            awarded = pts
+        else:
+            awarded = pts // 2
+        room['players'][buzzer_name]['score'] += awarded
+        room['board'][(cat, pts)]['state'] = 'used'
+        room['current_cell'] = None
+        room['buzzer_open'] = False
+
+        unused = [(c, p) for (c, p), v in room['board'].items() if v['state'] == 'unused']
+        if not unused:
+            room['state'] = 'finished'
+            socketio.emit('round_result', {
+                'result': result, 'correct': True, 'name': buzzer_name, 'points_change': awarded,
                 'scores': room_scores(room), 'board': serialize_board(room),
                 'music': music if music else None,
                 'category': cat, 'pts': pts,
@@ -756,7 +982,7 @@ def handle_judge(data):
             room['picker'] = buzzer_name
             room['pick_timer_id'] += 1
             socketio.emit('round_result', {
-                'correct': True, 'name': buzzer_name, 'points_change': pts,
+                'result': result, 'correct': True, 'name': buzzer_name, 'points_change': awarded,
                 'scores': room_scores(room), 'board': serialize_board(room),
                 'picker': buzzer_name,
                 'music': music if music else None,
@@ -765,7 +991,7 @@ def handle_judge(data):
             # 15s pick timeout
             timer_id = room['pick_timer_id']
             socketio.start_background_task(pick_timeout, room['code'], buzzer_name, timer_id)
-    else:
+    elif result == 'wrong':
         penalty = int(pts * room['settings']['penalty_fraction'])
         room['players'][buzzer_name]['score'] -= penalty
         room['buzz_locked'].add(buzzer_name)
@@ -783,7 +1009,7 @@ def handle_judge(data):
             if not unused:
                 room['state'] = 'finished'
                 socketio.emit('round_result', {
-                    'correct': False, 'name': buzzer_name, 'points_change': -penalty,
+                    'result': 'wrong', 'correct': False, 'name': buzzer_name, 'points_change': -penalty,
                     'all_locked': True, 'scores': room_scores(room), 'board': serialize_board(room),
                     'music': music if music else None,
                     'category': cat, 'pts': pts,
@@ -793,7 +1019,7 @@ def handle_judge(data):
                 room['state'] = 'picking'
                 room['picker'] = None  # Host picks
                 socketio.emit('round_result', {
-                    'correct': False, 'name': buzzer_name, 'points_change': -penalty,
+                    'result': 'wrong', 'correct': False, 'name': buzzer_name, 'points_change': -penalty,
                     'all_locked': True, 'scores': room_scores(room), 'board': serialize_board(room),
                     'picker': None,
                     'music': music if music else None,
@@ -808,12 +1034,17 @@ def handle_judge(data):
                 'name': buzzer_name, 'points_change': -penalty,
                 'scores': room_scores(room),
                 'locked': list(room['buzz_locked']),
+                'guess_remaining': room.get('guess_remaining', 15),
             }, room=room['code'])
 
 
 def pick_timeout(room_code, picker_name, timer_id):
     room = buzzer_rooms.get(room_code)
     if not room:
+        return
+    # Wait for client reveal animation before starting countdown
+    socketio.sleep(4)
+    if not buzzer_rooms.get(room_code) or room['pick_timer_id'] != timer_id:
         return
     remaining = 15
     while remaining > 0:
@@ -851,10 +1082,35 @@ def handle_play_cell_internal(room, cat, pts):
     socketio.emit('round_start', {
         'category': cat, 'pts': pts,
         'music': music_data,
-        'play_duration': room['play_duration'],
         'guess_duration': room['guess_duration'],
+        'buzzer_open': False,
     }, room=room['code'])
-    socketio.start_background_task(buzzer_open_timer, room['code'], key)
+    # Auto-open buzzer after 15 seconds if host doesn't open manually
+    socketio.start_background_task(auto_open_buzzer, room['code'], key)
+
+
+def auto_open_buzzer(room_code, cell_key):
+    room = buzzer_rooms.get(room_code)
+    if not room:
+        return
+    remaining = 15
+    while remaining > 0:
+        socketio.sleep(1)
+        if not buzzer_rooms.get(room_code):
+            return
+        if room.get('current_cell') != cell_key:
+            return
+        if room['state'] != 'playing':
+            return  # Host already opened buzzer manually or game paused differently
+        if room['state'] == 'paused':
+            continue
+        remaining -= 1
+    # Auto-open if still in playing state
+    if room.get('current_cell') == cell_key and room['state'] == 'playing':
+        room['state'] = 'buzzing'
+        room['buzzer_open'] = True
+        socketio.emit('buzzer_open', {'guess_duration': room['guess_duration']}, room=room_code)
+        socketio.start_background_task(guess_timeout, room_code, cell_key)
 
 
 @socketio.on('pick_cell')
@@ -879,6 +1135,17 @@ def handle_pick_cell(data):
     room['pick_timer_id'] += 1  # Cancel any pending timeout
     socketio.emit('cell_picked', {'category': cat, 'pts': pts, 'picker': name or 'host'}, room=room['code'])
     handle_play_cell_internal(room, cat, pts)
+
+
+@socketio.on('end_game')
+def handle_end_game(data=None):
+    room = get_room_by_sid(request.sid)
+    if not room or room['host_sid'] != request.sid:
+        return
+    room['state'] = 'finished'
+    room['current_cell'] = None
+    room['buzzer_open'] = False
+    socketio.emit('game_over', {'scores': room_scores(room)}, room=room['code'])
 
 
 @socketio.on('disconnect')

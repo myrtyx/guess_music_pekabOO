@@ -4,6 +4,7 @@ game_state.json
 game_state.json.bak
 game.json
 session.json
+games/
 .claude/
 # Byte-compiled / optimized / DLL files
 __pycache__/
