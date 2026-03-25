@@ -100,7 +100,11 @@ def load_game(name):
     return True
 
 
+_last_checkpoint_cells = 0  # Track cell count for auto-checkpoint
+
+
 def save_session():
+    global _last_checkpoint_cells
     if not active_game_name:
         return
     data = {
@@ -111,6 +115,11 @@ def save_session():
     }
     with open(session_path(active_game_name), 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+    # Auto-checkpoint every 3 used cells
+    used = sum(1 for v in board.values() if v.get('state') == 'used')
+    if used > 0 and used >= _last_checkpoint_cells + 3:
+        _last_checkpoint_cells = used
+        save_checkpoint()
 
 
 def load_session():
@@ -160,6 +169,87 @@ def delete_game(name):
         os.remove(path)
     if os.path.exists(spath):
         os.remove(spath)
+    # Delete checkpoints
+    for i in range(1, 6):
+        cp = checkpoint_path(name, i)
+        if os.path.exists(cp):
+            os.remove(cp)
+
+
+# ==================== CHECKPOINTS ====================
+MAX_CHECKPOINTS = 5
+
+
+def checkpoint_path(game_name, slot):
+    return os.path.join(GAMES_DIR, f'{game_name}_checkpoint_{slot}.json')
+
+
+def save_checkpoint():
+    """Save current session as a checkpoint. Shifts old ones down, keeps max 5."""
+    if not active_game_name:
+        return
+    ensure_games_dir()
+    # Shift existing checkpoints: 5→delete, 4→5, 3→4, 2→3, 1→2
+    old = checkpoint_path(active_game_name, MAX_CHECKPOINTS)
+    if os.path.exists(old):
+        os.remove(old)
+    for i in range(MAX_CHECKPOINTS - 1, 0, -1):
+        src = checkpoint_path(active_game_name, i)
+        dst = checkpoint_path(active_game_name, i + 1)
+        if os.path.exists(src):
+            os.rename(src, dst)
+    # Save current as checkpoint 1
+    import datetime
+    data = {
+        'teams': teams,
+        'board': {str(k): v for k, v in board.items()},
+        'current_team': current_team,
+        'mode': active_mode,
+        'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    with open(checkpoint_path(active_game_name, 1), 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+def list_checkpoints():
+    """List available checkpoints for active game."""
+    if not active_game_name:
+        return []
+    checkpoints = []
+    for i in range(1, MAX_CHECKPOINTS + 1):
+        cp = checkpoint_path(active_game_name, i)
+        if os.path.exists(cp):
+            with open(cp, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            # Count used cells
+            used = sum(1 for v in data.get('board', {}).values() if v.get('state') == 'used')
+            total = len(data.get('board', {}))
+            checkpoints.append({
+                'slot': i,
+                'timestamp': data.get('timestamp', '?'),
+                'used_cells': used,
+                'total_cells': total,
+                'team_count': len(data.get('teams', [])),
+            })
+    return checkpoints
+
+
+def restore_checkpoint(slot):
+    """Restore session from a checkpoint."""
+    global teams, board, current_team, active_mode
+    if not active_game_name:
+        return False
+    cp = checkpoint_path(active_game_name, slot)
+    if not os.path.exists(cp):
+        return False
+    with open(cp, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    teams = data.get('teams', [])
+    board = _parse_tuple_keys(data.get('board', {}))
+    current_team = data.get('current_team', 0)
+    active_mode = data.get('mode', active_mode)
+    save_session()
+    return True
 
 
 def migrate_old_files():
@@ -324,7 +414,8 @@ def admin():
     return render_template('admin.html',
                            genres=genres, points=points, music_mapping=music_mapping,
                            play_duration=play_duration, guess_duration=guess_duration,
-                           games=list_games(), active_game=active_game_name, active_mode=active_mode)
+                           games=list_games(), active_game=active_game_name, active_mode=active_mode,
+                           checkpoints=list_checkpoints())
 
 
 @app.route('/admin/create_game', methods=['POST'])
@@ -432,9 +523,24 @@ def admin_update_grid():
 
 @app.route('/admin/reset_session', methods=['POST'])
 def admin_reset_session():
+    save_checkpoint()  # Save before reset
     reset_session()
     if active_game_name:
         save_session()
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/save_checkpoint', methods=['POST'])
+def admin_save_checkpoint():
+    save_checkpoint()
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/restore_checkpoint', methods=['POST'])
+def admin_restore_checkpoint():
+    slot = int(request.form.get('slot', 0))
+    if slot > 0:
+        restore_checkpoint(slot)
     return redirect(url_for('admin'))
 
 

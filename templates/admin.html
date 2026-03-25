@@ -618,13 +618,44 @@
                 <h3>Управление</h3>
             </div>
             <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap;">
-                <form method="post" action="{{ url_for('admin_reset_session') }}" onsubmit="return confirm('Сбросить сессию? Счёт и прогресс обнулятся.')">
+                <form method="post" action="{{ url_for('admin_reset_session') }}" onsubmit="return confirm('Сбросить сессию? Будет создан чекпоинт перед сбросом.')">
                     <button type="submit" class="danger-btn">Сбросить сессию</button>
+                </form>
+                <form method="post" action="{{ url_for('admin_save_checkpoint') }}">
+                    <button type="submit" class="config-btn">Сохранить чекпоинт</button>
                 </form>
                 <a href="{{ url_for('download_game_file') }}" class="config-btn" style="text-decoration:none;">Скачать игру</a>
                 <a href="{{ url_for('download_session_file') }}" class="config-btn" style="text-decoration:none;">Скачать сессию</a>
             </div>
         </div>
+
+        <!-- Checkpoints -->
+        {% if checkpoints %}
+        <div class="card">
+            <div class="card-head">
+                <span class="icon">&#128190;</span>
+                <h3>Чекпоинты ({{ checkpoints|length }}/5)</h3>
+            </div>
+            <div class="card-body">
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    {% for cp in checkpoints %}
+                    <div style="display:flex; align-items:center; justify-content:space-between; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px;">
+                        <div>
+                            <span style="font-weight:700; color:var(--text);">#{{ cp.slot }}</span>
+                            <span style="color:var(--text-dim); margin-left:8px;">{{ cp.timestamp }}</span>
+                            <span style="color:var(--amber); margin-left:12px;">{{ cp.used_cells }}/{{ cp.total_cells }} ячеек</span>
+                        </div>
+                        <form method="post" action="{{ url_for('admin_restore_checkpoint') }}" style="margin:0;" onsubmit="return confirm('Восстановить чекпоинт #{{ cp.slot }}?')">
+                            <input type="hidden" name="slot" value="{{ cp.slot }}">
+                            <button type="submit" class="config-btn" style="padding:6px 16px; font-size:13px;">Восстановить</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p style="margin-top:12px; font-size:13px; color:var(--text-dim);">Чекпоинты создаются автоматически каждые 3 ячейки и при сбросе сессии.</p>
+            </div>
+        </div>
+        {% endif %}
         {% endif %}
     </div>
 

@@ -1540,36 +1540,45 @@
             if (ytPending) { ytPending(); ytPending = null; }
         };
 
-        function loadYouTube(videoId, startSec) {
-            function applyVolumeToYT() {
+        // Global volume enforcer — runs every 2s to catch any YouTube resets
+        setInterval(function() {
+            if (ytPlayer && isPlaying) {
                 try {
-                    if (isMuted) ytPlayer.mute();
-                    else { ytPlayer.unMute(); ytPlayer.setVolume(currentVolume); }
+                    var ytVol = ytPlayer.getVolume();
+                    if (!isMuted && ytVol !== currentVolume) {
+                        ytPlayer.unMute();
+                        ytPlayer.setVolume(currentVolume);
+                    }
+                    if (isMuted && !ytPlayer.isMuted()) {
+                        ytPlayer.mute();
+                    }
                 } catch(e) {}
             }
+        }, 2000);
 
+        function enforceYTVolume() {
+            if (!ytPlayer) return;
+            try {
+                if (isMuted) { ytPlayer.mute(); }
+                else { ytPlayer.unMute(); ytPlayer.setVolume(currentVolume); }
+            } catch(e) {}
+        }
+
+        function loadYouTube(videoId, startSec) {
             // Reuse existing player if possible
             if (ytPlayer && ytPlayer.loadVideoById) {
                 try {
-                    // Mute before loading to prevent volume spike
                     ytPlayer.mute();
                     ytPlayer.loadVideoById({videoId: videoId, startSeconds: startSec || 0});
-                    // Unmute and set correct volume after load
-                    setTimeout(function() {
-                        if (!isMuted) { try { ytPlayer.unMute(); } catch(e) {} }
-                        try { ytPlayer.setVolume(currentVolume); } catch(e) {}
-                    }, 300);
-                    setTimeout(function() {
-                        if (!isMuted) { try { ytPlayer.unMute(); } catch(e) {} }
-                        try { ytPlayer.setVolume(currentVolume); } catch(e) {}
-                    }, 1000);
+                    setTimeout(enforceYTVolume, 500);
+                    setTimeout(enforceYTVolume, 1500);
+                    setTimeout(enforceYTVolume, 3000);
                     document.getElementById('playerBox').style.display = 'flex';
                     isPlaying = true;
                     updatePlayBtn();
                     startProgressUpdate(ytProgress);
                     return;
                 } catch(e) {
-                    // Player is broken, recreate
                     try { ytPlayer.destroy(); } catch(e2) {}
                     ytPlayer = null;
                     var container = document.querySelector('.yt-hidden');
@@ -1583,13 +1592,15 @@
                     videoId: videoId,
                     playerVars: { autoplay: 1, start: startSec, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, rel: 0 },
                     events: {
-                        onReady: function(e) { applyVolumeToYT(); e.target.playVideo(); },
+                        onReady: function(e) {
+                            enforceYTVolume();
+                            e.target.playVideo();
+                        },
                         onStateChange: function(e) {
                             isPlaying = (e.data === YT.PlayerState.PLAYING);
                             updatePlayBtn();
                             if (isPlaying) {
-                                // Always enforce volume when playback starts
-                                applyVolumeToYT();
+                                enforceYTVolume();
                                 startProgressUpdate(ytProgress);
                             } else {
                                 stopProgressUpdate();
