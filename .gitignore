@@ -1,6 +1,9 @@
 venv/
 .pyc
 game_state.json
+game_state.json.bak
+game.json
+session.json
 .claude/
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pekabOO — Баззер (Ведущий)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #13131a;
+            --surface-2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #7a7a8e;
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.3);
+            --green: #22c55e;
+            --green-glow: rgba(34, 197, 94, 0.25);
+            --amber: #f59e0b;
+            --amber-glow: rgba(245, 158, 11, 0.25);
+            --red: #ef4444;
+            --red-glow: rgba(239, 68, 68, 0.25);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 600px 400px at 20% 20%, rgba(168, 85, 247, 0.08), transparent),
+                radial-gradient(ellipse 500px 500px at 80% 80%, rgba(34, 197, 94, 0.06), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* === TIMER BAR === */
+        .timer-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: var(--green);
+            z-index: 200;
+            transition: width 1s linear, background 0.5s;
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+            width: 0%;
+        }
+        .timer-bar.warning { background: var(--amber); box-shadow: 0 0 12px rgba(245, 158, 11, 0.5); }
+        .timer-bar.danger { background: var(--red); box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
+
+        /* === VOLUME CONTROL === */
+        .volume-control {
+            position: fixed;
+            top: 12px;
+            right: 24px;
+            z-index: 150;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: rgba(19, 19, 26, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 50px;
+            padding: 8px 16px;
+        }
+        .volume-control.visible { display: flex; }
+        .vol-icon { font-size: 18px; cursor: pointer; user-select: none; width: 24px; text-align: center; }
+        .vol-slider {
+            -webkit-appearance: none; appearance: none;
+            width: 100px; height: 4px; background: var(--border);
+            border-radius: 2px; outline: none; cursor: pointer;
+        }
+        .vol-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; box-shadow: 0 0 8px var(--accent-glow);
+        }
+        .vol-slider::-moz-range-thumb {
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: none;
+        }
+
+        /* === NAV === */
+        nav {
+            position: sticky; top: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 32px;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .logo {
+            font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links a {
+            color: var(--text-dim); text-decoration: none; font-size: 14px;
+            padding: 8px 16px; border-radius: 8px; transition: all 0.2s;
+        }
+        .nav-links a:hover { color: var(--text); background: var(--surface-2); }
+
+        /* === PHASES — SHOW/HIDE === */
+        .phase { display: none; }
+        .phase.active { display: block; }
+
+        /* === MAIN CONTAINER === */
+        .main {
+            position: relative; z-index: 1;
+            max-width: 1200px; margin: 0 auto; padding: 32px 24px;
+        }
+
+        /* ====================== */
+        /* === LOBBY PHASE ====== */
+        /* ====================== */
+        .lobby-center { text-align: center; padding: 48px 0; }
+
+        .room-code-label {
+            font-size: 14px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 2px; color: var(--text-dim); margin-bottom: 12px;
+        }
+        .room-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(64px, 12vw, 120px);
+            font-weight: 700; letter-spacing: 16px;
+            color: var(--accent);
+            line-height: 1.1; margin-bottom: 12px;
+        }
+        .connect-hint {
+            font-size: clamp(16px, 2.5vw, 22px);
+            color: var(--text-dim); margin-bottom: 48px;
+        }
+        .connect-hint strong { color: var(--text); font-weight: 600; }
+
+        .lobby-grid {
+            display: grid; grid-template-columns: 1fr 320px; gap: 32px;
+            max-width: 900px; margin: 0 auto; text-align: left;
+        }
+        @media (max-width: 700px) { .lobby-grid { grid-template-columns: 1fr; } }
+
+        .players-section h3, .settings-section h3 {
+            font-size: 14px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 2px; color: var(--text-dim); margin-bottom: 16px;
+        }
+
+        .player-list {
+            display: flex; flex-direction: column; gap: 8px; min-height: 80px;
+        }
+        .player-tag {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 50px; padding: 10px 20px; font-weight: 600; font-size: 16px;
+            animation: fade-up 0.3s ease-out;
+        }
+        .player-tag .dot {
+            width: 10px; height: 10px; border-radius: 50%; background: var(--green);
+            box-shadow: 0 0 8px var(--green-glow);
+        }
+        .player-tag.disconnected { opacity: 0.4; }
+        .player-tag.disconnected .dot { background: var(--text-dim); box-shadow: none; }
+        .no-players { color: var(--text-dim); font-style: italic; }
+
+        .settings-section { display: flex; flex-direction: column; gap: 16px; }
+        .setting-group label {
+            display: block; font-size: 13px; color: var(--text-dim);
+            margin-bottom: 6px; font-weight: 600;
+        }
+        .setting-input, .setting-select {
+            width: 100%; padding: 10px 14px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text);
+            font-family: 'Outfit', sans-serif; font-size: 15px;
+            outline: none; transition: border-color 0.2s;
+        }
+        .setting-input:focus, .setting-select:focus { border-color: var(--accent); }
+        .setting-select option { background: var(--surface); color: var(--text); }
+
+        .start-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 16px 32px; margin-top: 8px;
+            border: none; border-radius: 50px;
+            font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700;
+            cursor: pointer; transition: all 0.3s;
+            background: linear-gradient(135deg, var(--green), #4ade80);
+            color: #0a0a0f;
+            box-shadow: 0 4px 20px var(--green-glow);
+        }
+        .start-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--green-glow); }
+        .start-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+        /* ======================= */
+        /* === BOARD PHASE ======= */
+        /* ======================= */
+        .board-layout {
+            display: grid; grid-template-columns: 1fr 280px; gap: 24px;
+        }
+        @media (max-width: 800px) { .board-layout { grid-template-columns: 1fr; } }
+
+        .picker-banner {
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px 24px; margin-bottom: 20px;
+        }
+        .picker-banner .picker-name { font-weight: 700; font-size: 18px; }
+        .picker-banner .picker-name strong { color: var(--accent); }
+        .picker-timer {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: 22px; color: var(--amber);
+        }
+
+        .board {
+            display: grid; gap: 2px;
+            background: var(--border); border-radius: var(--radius);
+            overflow: hidden; box-shadow: 0 4px 40px rgba(0,0,0,0.4);
+        }
+        .board-header { display: contents; }
+        .board-header .cell {
+            background: var(--surface); font-weight: 700;
+            font-size: clamp(12px, 1.8vw, 16px); color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .board-row { display: contents; }
+        .cell {
+            display: flex; align-items: center; justify-content: center;
+            padding: clamp(12px, 2vw, 20px); text-align: center; min-height: 64px;
+        }
+        .cat-label {
+            background: var(--surface); font-weight: 700;
+            font-size: clamp(13px, 1.8vw, 17px); color: var(--accent); letter-spacing: 0.5px;
+        }
+        .cell-unused { background: var(--surface-2); transition: all 0.2s; cursor: pointer; }
+        .cell-unused:hover { background: #222233; }
+        .cell-unused .pts-link {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: clamp(16px, 2.5vw, 24px); color: var(--green);
+            transition: all 0.2s; cursor: pointer;
+        }
+        .cell-unused:hover .pts-link { color: #fff; text-shadow: 0 0 20px var(--green-glow); transform: scale(1.1); }
+        .cell-used { background: var(--bg); }
+        .cell-used span { color: var(--border); font-size: 20px; }
+
+        /* Leaderboard sidebar */
+        .leaderboard { display: flex; flex-direction: column; gap: 8px; }
+        .leaderboard h3 {
+            font-size: 14px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 2px; color: var(--text-dim); margin-bottom: 8px;
+        }
+        .lb-entry {
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px 16px; transition: all 0.3s;
+        }
+        .lb-entry.is-picker { border-color: var(--accent); box-shadow: 0 0 16px var(--accent-glow); }
+        .lb-entry.disconnected { opacity: 0.4; }
+        .lb-rank {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: 14px; color: var(--text-dim); min-width: 28px;
+        }
+        .lb-name { font-weight: 600; font-size: 15px; flex: 1; margin-left: 8px; }
+        .lb-score {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: 18px; color: var(--green);
+        }
+
+        /* ============================ */
+        /* === PLAYING PHASE ========== */
+        /* ============================ */
+        .playing-center { text-align: center; max-width: 700px; margin: 0 auto; }
+
+        .cell-badge {
+            display: inline-flex; align-items: center; gap: 12px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 50px; padding: 10px 24px; margin-bottom: 16px;
+        }
+        .cell-badge .cat { font-weight: 700; color: var(--accent); }
+        .cell-badge .pts {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            color: var(--green); font-size: 20px;
+        }
+
+        .timer-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(48px, 10vw, 80px);
+            font-weight: 700; margin: 24px 0; letter-spacing: -2px;
+            transition: color 0.5s;
+        }
+        .timer-green { color: var(--green); }
+        .timer-amber { color: var(--amber); }
+        .timer-red { color: var(--red); }
+
+        .yt-hidden {
+            width: 1px; height: 1px; overflow: hidden;
+            opacity: 0; position: absolute; pointer-events: none;
+        }
+
+        .player-box {
+            display: flex; align-items: center; gap: 16px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 60px; padding: 12px 28px; margin: 24px auto 32px;
+            justify-content: center; width: fit-content;
+        }
+        .play-btn {
+            width: 52px; height: 52px; border-radius: 50%; border: none;
+            background: var(--accent); color: #fff; font-size: 22px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; box-shadow: 0 4px 16px var(--accent-glow); flex-shrink: 0;
+        }
+        .play-btn:hover { transform: scale(1.08); box-shadow: 0 6px 24px var(--accent-glow); }
+        .player-time {
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+            color: var(--text-dim); min-width: 42px;
+        }
+        .progress-track {
+            width: 180px; height: 6px; background: var(--border);
+            border-radius: 3px; cursor: pointer; position: relative; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, var(--accent), #c084fc);
+            border-radius: 3px; width: 0%; transition: width 0.4s linear;
+        }
+
+        .open-buzzer-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 16px 36px; margin-top: 16px;
+            border: none; border-radius: 50px;
+            font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 700;
+            cursor: pointer; transition: all 0.3s;
+            background: linear-gradient(135deg, var(--amber), #fbbf24);
+            color: #0a0a0f;
+            box-shadow: 0 4px 20px var(--amber-glow);
+        }
+        .open-buzzer-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--amber-glow); }
+
+        /* ============================ */
+        /* === BUZZING PHASE ========== */
+        /* ============================ */
+        .buzzing-center { text-align: center; padding: 64px 0; }
+
+        .buzzer-open-text {
+            font-size: clamp(36px, 8vw, 72px); font-weight: 800;
+            color: var(--red); text-shadow: 0 0 40px var(--red-glow);
+            animation: buzzer-pulse 1s ease-in-out infinite;
+            margin-bottom: 24px;
+        }
+        @keyframes buzzer-pulse {
+            0%, 100% { text-shadow: 0 0 20px var(--red-glow); }
+            50% { text-shadow: 0 0 60px var(--red-glow), 0 0 100px var(--red-glow); }
+        }
+
+        /* ============================ */
+        /* === JUDGING PHASE ========== */
+        /* ============================ */
+        .judging-center { text-align: center; padding: 48px 0; }
+
+        .buzzer-winner {
+            font-size: clamp(28px, 6vw, 52px); font-weight: 800;
+            margin-bottom: 48px;
+        }
+        .buzzer-winner strong { color: var(--accent); }
+
+        .judge-buttons { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+        .judge-btn {
+            padding: 24px 48px; border: none; border-radius: 16px;
+            font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; min-width: 200px;
+        }
+        .judge-btn:hover { transform: translateY(-3px); }
+        .judge-correct {
+            background: var(--green); color: #0a0a0f;
+            box-shadow: 0 4px 24px var(--green-glow);
+        }
+        .judge-correct:hover { box-shadow: 0 8px 40px var(--green-glow); }
+        .judge-wrong {
+            background: var(--red); color: #fff;
+            box-shadow: 0 4px 24px var(--red-glow);
+        }
+        .judge-wrong:hover { box-shadow: 0 8px 40px var(--red-glow); }
+
+        /* ============================ */
+        /* === RESULT FLASH =========== */
+        /* ============================ */
+        .result-center { text-align: center; padding: 64px 0; }
+        .result-text {
+            font-size: clamp(32px, 7vw, 60px); font-weight: 800;
+            margin-bottom: 24px; animation: fade-up 0.4s ease-out;
+        }
+        .result-positive { color: var(--green); }
+        .result-negative { color: var(--red); }
+        .result-neutral { color: var(--text-dim); }
+
+        .reveal-info {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 24px 32px;
+            display: inline-block; margin-top: 24px; text-align: left;
+        }
+        .reveal-info .reveal-title { font-weight: 700; font-size: 20px; margin-bottom: 8px; }
+        .reveal-info .reveal-artist { color: var(--text-dim); font-size: 16px; }
+
+        /* ============================ */
+        /* === GAME OVER ============== */
+        /* ============================ */
+        .gameover-center { text-align: center; padding: 48px 0; }
+
+        .gameover-title {
+            font-size: clamp(32px, 7vw, 56px); font-weight: 800;
+            margin-bottom: 48px;
+            background: linear-gradient(135deg, var(--accent), #c084fc, var(--green));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .podium { display: flex; justify-content: center; align-items: flex-end; gap: 16px; margin-bottom: 48px; }
+        .podium-place {
+            display: flex; flex-direction: column; align-items: center;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 24px 20px; min-width: 160px;
+        }
+        .podium-place.gold { border-color: #fbbf24; box-shadow: 0 0 30px rgba(251, 191, 36, 0.3); order: 2; }
+        .podium-place.silver { border-color: #94a3b8; box-shadow: 0 0 20px rgba(148, 163, 184, 0.2); order: 1; }
+        .podium-place.bronze { border-color: #d97706; box-shadow: 0 0 20px rgba(217, 119, 6, 0.2); order: 3; }
+        .podium-medal { font-size: 36px; margin-bottom: 8px; }
+        .podium-name { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+        .podium-score {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: 28px; color: var(--green);
+        }
+
+        .final-list { max-width: 500px; margin: 0 auto; }
+        .final-entry {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 20px; border-bottom: 1px solid var(--border);
+        }
+        .final-rank { font-family: 'JetBrains Mono', monospace; color: var(--text-dim); min-width: 32px; font-weight: 700; }
+        .final-name { flex: 1; font-weight: 600; margin-left: 8px; }
+        .final-score { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--green); font-size: 18px; }
+
+        /* === ANIMATIONS === */
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-down {
+            from { opacity: 0; transform: translateY(-16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="timer-bar" id="timerBar"></div>
+
+    <div class="volume-control" id="volumeControl">
+        <span class="vol-icon" id="volIcon" onclick="toggleMute()">&#128266;</span>
+        <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="80" oninput="changeVolume(this.value)">
+    </div>
+
+    <nav>
+        <span class="logo">pekabOO</span>
+        <div class="nav-links">
+            <a href="/">&#8592; Главная</a>
+        </div>
+    </nav>
+
+    <div class="main">
+        <!-- ============ LOBBY PHASE ============ -->
+        <div class="phase active" id="phaseLobby">
+            <div class="lobby-center">
+                <div class="room-code-label">Код комнаты</div>
+                <div class="room-code" id="roomCode">. . . . . .</div>
+                <div class="connect-hint">Подключитесь: <strong id="connectUrl"></strong></div>
+
+                <div class="lobby-grid">
+                    <div class="players-section">
+                        <h3>Игроки (<span id="playerCount">0</span>)</h3>
+                        <div class="player-list" id="playerList">
+                            <div class="no-players" id="noPlayers">Ожидание игроков...</div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Настройки</h3>
+                        <div class="setting-group">
+                            <label>Макс. игроков</label>
+                            <input type="number" class="setting-input" id="settingMaxPlayers" value="8" min="2" max="20" onchange="updateSettings()">
+                        </div>
+                        <div class="setting-group">
+                            <label>Штраф за неверный ответ (доля очков)</label>
+                            <select class="setting-select" id="settingPenalty" onchange="updateSettings()">
+                                <option value="0">0 (без штрафа)</option>
+                                <option value="0.25">0.25</option>
+                                <option value="0.5" selected>0.5</option>
+                                <option value="0.75">0.75</option>
+                                <option value="1">1 (полный штраф)</option>
+                            </select>
+                        </div>
+                        <button class="start-btn" id="startBtn" onclick="startGame()" disabled>Начать игру</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ BOARD PHASE ============ -->
+        <div class="phase" id="phaseBoard">
+            <div id="pickerBanner" class="picker-banner" style="display:none;">
+                <div class="picker-name">Выбирает: <strong id="pickerName"></strong></div>
+                <div class="picker-timer" id="pickerTimer">15</div>
+            </div>
+            <div class="board-layout">
+                <div>
+                    <div class="board" id="gameBoard"></div>
+                </div>
+                <div class="leaderboard" id="leaderboard">
+                    <h3>Счет</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ PLAYING PHASE ============ -->
+        <div class="phase" id="phasePlaying">
+            <div class="playing-center">
+                <div class="cell-badge">
+                    <span class="cat" id="playingCategory"></span>
+                    <span class="pts" id="playingPoints"></span>
+                </div>
+                <div class="timer-display timer-green" id="playingTimer">0</div>
+                <div class="yt-hidden"><div id="yt-player"></div></div>
+                <div id="scContainer" style="position:fixed;left:-9999px;top:0;width:300px;height:166px;overflow:hidden;">
+                    <iframe id="sc-widget" width="300" height="166" scrolling="no" frameborder="no" allow="autoplay" src=""></iframe>
+                </div>
+                <div class="player-box" id="playerBox" style="display:none;">
+                    <button class="play-btn" id="playPauseBtn" onclick="togglePlay()">&#9654;</button>
+                    <span class="player-time" id="currentTime">0:00</span>
+                    <div class="progress-track" id="progressBar" onclick="seekTo(event)">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <span class="player-time" id="duration">0:00</span>
+                </div>
+                <button class="open-buzzer-btn" id="openBuzzerBtn" onclick="openBuzzerEarly()">Открыть баззер</button>
+                <button class="open-buzzer-btn" id="pauseBtn" onclick="socket.emit('pause_game')" style="background:var(--amber);color:#0a0a0f;">Пауза</button>
+            </div>
+        </div>
+
+        <!-- ============ BUZZING PHASE ============ -->
+        <div class="phase" id="phaseBuzzing">
+            <div class="buzzing-center">
+                <div class="cell-badge">
+                    <span class="cat" id="buzzingCategory"></span>
+                    <span class="pts" id="buzzingPoints"></span>
+                </div>
+                <div class="buzzer-open-text">БАЗЗЕР ОТКРЫТ!</div>
+                <div class="timer-display timer-amber" id="buzzingTimer">0</div>
+            </div>
+        </div>
+
+        <!-- ============ JUDGING PHASE ============ -->
+        <div class="phase" id="phaseJudging">
+            <div class="judging-center">
+                <div class="buzzer-winner" id="buzzerWinner"></div>
+                <div class="judge-buttons">
+                    <button class="judge-btn judge-correct" onclick="judge(true)">Верно</button>
+                    <button class="judge-btn judge-wrong" onclick="judge(false)">Неверно</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ RESULT PHASE ============ -->
+        <div class="phase" id="phaseResult">
+            <div class="result-center">
+                <div class="result-text" id="resultText"></div>
+                <div class="reveal-info" id="revealInfo" style="display:none;">
+                    <div class="reveal-title" id="revealTitle"></div>
+                    <div class="reveal-artist" id="revealArtist"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ GAME OVER PHASE ============ -->
+        <div class="phase" id="phaseGameOver">
+            <div class="gameover-center">
+                <div class="gameover-title">Игра окончена!</div>
+                <div class="podium" id="podium"></div>
+                <div class="final-list" id="finalList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ===================================================
+           STATE
+           =================================================== */
+        var socket = io({transports: ['websocket', 'polling']});
+        socket.on('connect_error', function(err) { console.error('Socket connect error:', err); });
+        console.log('Socket.IO initializing...');
+        var roomCode = null;
+        var players = {};          // {sid: {name, score, connected}}
+        var boardData = {};        // {"Cat|100": {state: "unused"|"used"}}
+        var categories = [];
+        var pointValues = [];
+        var currentPicker = null;
+        var currentCategory = '';
+        var currentPoints = 0;
+        var playTimerInterval = null;
+        var buzzTimerInterval = null;
+        var pickerTimerInterval = null;
+        var currentMusicType = null;
+
+        /* ===================================================
+           HELPERS
+           =================================================== */
+        function showPhase(id) {
+            document.querySelectorAll('.phase').forEach(function(p) { p.classList.remove('active'); });
+            document.getElementById(id).classList.add('active');
+        }
+
+        function formatTime(s) {
+            var m = Math.floor(s / 60);
+            var sec = Math.floor(s % 60);
+            return m + ':' + (sec < 10 ? '0' : '') + sec;
+        }
+
+        function timerColor(timeLeft, total) {
+            var pct = timeLeft / total;
+            if (pct <= 0.15) return 'danger';
+            if (pct <= 0.4) return 'warning';
+            return '';
+        }
+
+        function timerTextClass(timeLeft, total) {
+            var pct = timeLeft / total;
+            if (pct <= 0.15) return 'timer-red';
+            if (pct <= 0.4) return 'timer-amber';
+            return 'timer-green';
+        }
+
+        function updateTimerBar(timeLeft, total) {
+            var bar = document.getElementById('timerBar');
+            if (total <= 0) { bar.style.width = '0%'; return; }
+            var pct = (timeLeft / total) * 100;
+            bar.style.width = pct + '%';
+            bar.className = 'timer-bar ' + timerColor(timeLeft, total);
+        }
+
+        function clearAllTimers() {
+            if (playTimerInterval) { clearInterval(playTimerInterval); playTimerInterval = null; }
+            if (buzzTimerInterval) { clearInterval(buzzTimerInterval); buzzTimerInterval = null; }
+            if (pickerTimerInterval) { clearInterval(pickerTimerInterval); pickerTimerInterval = null; }
+            document.getElementById('timerBar').style.width = '0%';
+        }
+
+        /* ===================================================
+           LOBBY
+           =================================================== */
+        document.getElementById('connectUrl').textContent = window.location.host + '/play';
+
+        socket.on('connect', function() {
+            console.log('Socket connected! SID:', socket.id);
+            if (!roomCode) {
+                console.log('Emitting create_room...');
+                socket.emit('create_room');
+            }
+        });
+
+        socket.on('room_created', function(data) {
+            console.log('room_created received:', data);
+            roomCode = data.code;
+            document.getElementById('roomCode').textContent = roomCode;
+        });
+
+        socket.on('error', function(data) {
+            console.error('Server error:', data);
+        });
+
+        socket.on('player_joined', function(data) {
+            // data.players is [{name, score, connected}, ...]
+            players = {};
+            data.players.forEach(function(p) {
+                players[p.name] = { name: p.name, score: p.score, connected: p.connected };
+            });
+            renderPlayerList();
+            renderLeaderboard();
+        });
+
+        socket.on('player_disconnected', function(data) {
+            // data.players is updated list
+            if (data.players) {
+                players = {};
+                data.players.forEach(function(p) {
+                    players[p.name] = { name: p.name, score: p.score, connected: p.connected };
+                });
+            } else if (data.name && players[data.name]) {
+                players[data.name].connected = false;
+            }
+            renderPlayerList();
+            renderLeaderboard();
+        });
+
+        function renderPlayerList() {
+            var list = document.getElementById('playerList');
+            var sids = Object.keys(players);
+            document.getElementById('playerCount').textContent = sids.length;
+            document.getElementById('startBtn').disabled = sids.length === 0;
+
+            if (sids.length === 0) {
+                list.innerHTML = '<div class="no-players">Ожидание игроков...</div>';
+                return;
+            }
+            var html = '';
+            sids.forEach(function(sid) {
+                var p = players[sid];
+                html += '<div class="player-tag' + (p.connected ? '' : ' disconnected') + '">' +
+                    '<span class="dot"></span>' + escHtml(p.name) + '</div>';
+            });
+            list.innerHTML = html;
+        }
+
+        function escHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function updateSettings() {
+            socket.emit('update_settings', {
+                settings: {
+                    max_players: parseInt(document.getElementById('settingMaxPlayers').value),
+                    penalty_fraction: parseFloat(document.getElementById('settingPenalty').value)
+                }
+            });
+        }
+
+        socket.on('settings_updated', function(data) {
+            if (data.max_players !== undefined) document.getElementById('settingMaxPlayers').value = data.max_players;
+            if (data.penalty_fraction !== undefined) document.getElementById('settingPenalty').value = data.penalty_fraction;
+        });
+
+        function startGame() {
+            socket.emit('start_game');
+        }
+
+        /* ===================================================
+           BOARD PHASE
+           =================================================== */
+        socket.on('game_started', function(data) {
+            boardData = data.board || {};
+            categories = data.genres || [];
+            pointsList = data.points || [];
+            parseBoard();
+            if (data.scores) {
+                players = {};
+                data.scores.forEach(function(p) {
+                    players[p.name] = { name: p.name, score: p.score, connected: p.connected };
+                });
+            }
+            goToBoard(data.picker || null);
+        });
+
+        function parseBoard() {
+            var cats = {};
+            var pts = {};
+            Object.keys(boardData).forEach(function(key) {
+                var parts = key.split('|');
+                var cat = parts[0];
+                var pt = parseInt(parts[1]);
+                cats[cat] = true;
+                pts[pt] = true;
+            });
+            categories = Object.keys(cats);
+            pointValues = Object.keys(pts).map(Number).sort(function(a, b) { return a - b; });
+        }
+
+        function goToBoard(picker) {
+            clearAllTimers();
+            destroyMusic();
+            showPhase('phaseBoard');
+            currentPicker = picker;
+            renderBoard();
+            renderLeaderboard();
+            renderPickerBanner();
+        }
+
+        function renderBoard() {
+            var cols = pointValues.length + 1;
+            var grid = document.getElementById('gameBoard');
+            grid.style.gridTemplateColumns = 'auto repeat(' + pointValues.length + ', 1fr)';
+
+            var html = '<div class="board-header"><div class="cell" style="background:var(--bg);"></div>';
+            pointValues.forEach(function(pt) {
+                html += '<div class="cell">' + pt + '</div>';
+            });
+            html += '</div>';
+
+            categories.forEach(function(cat) {
+                html += '<div class="board-row"><div class="cell cat-label">' + escHtml(cat) + '</div>';
+                pointValues.forEach(function(pt) {
+                    var key = cat + '|' + pt;
+                    var cellData = boardData[key];
+                    var state = cellData ? cellData.state : 'used';
+                    if (state === 'unused') {
+                        html += '<div class="cell cell-unused" onclick="playCell(\'' +
+                            escHtml(cat).replace(/'/g, "\\'") + '\',' + pt + ')">' +
+                            '<span class="pts-link">' + pt + '</span></div>';
+                    } else {
+                        html += '<div class="cell cell-used"><span>&mdash;</span></div>';
+                    }
+                });
+                html += '</div>';
+            });
+            grid.innerHTML = html;
+        }
+
+        function renderLeaderboard() {
+            var lb = document.getElementById('leaderboard');
+            var sorted = Object.keys(players).map(function(sid) {
+                return { sid: sid, name: players[sid].name, score: players[sid].score, connected: players[sid].connected };
+            }).sort(function(a, b) { return b.score - a.score; });
+
+            var html = '<h3>Счет</h3>';
+            sorted.forEach(function(p, i) {
+                var isPicker = (currentPicker && currentPicker === p.sid) || (currentPicker && currentPicker === p.name);
+                html += '<div class="lb-entry' + (isPicker ? ' is-picker' : '') + (!p.connected ? ' disconnected' : '') + '">' +
+                    '<span class="lb-rank">#' + (i + 1) + '</span>' +
+                    '<span class="lb-name">' + escHtml(p.name) + '</span>' +
+                    '<span class="lb-score">' + p.score + '</span></div>';
+            });
+            lb.innerHTML = html;
+        }
+
+        function renderPickerBanner() {
+            var banner = document.getElementById('pickerBanner');
+            if (!currentPicker) {
+                banner.style.display = 'none';
+                return;
+            }
+            banner.style.display = 'flex';
+            var name = currentPicker;
+            // If picker is a sid, resolve to name
+            if (players[currentPicker]) name = players[currentPicker].name;
+            document.getElementById('pickerName').textContent = name;
+
+            var timeLeft = 15;
+            document.getElementById('pickerTimer').textContent = timeLeft;
+            if (pickerTimerInterval) clearInterval(pickerTimerInterval);
+            pickerTimerInterval = setInterval(function() {
+                timeLeft--;
+                document.getElementById('pickerTimer').textContent = Math.max(0, timeLeft);
+                if (timeLeft <= 0) clearInterval(pickerTimerInterval);
+            }, 1000);
+        }
+
+        function playCell(category, pts) {
+            socket.emit('play_cell', { category: category, pts: pts });
+        }
+
+        socket.on('cell_picked', function(data) {
+            // Someone picked a cell, mark it
+            if (data.category && data.pts) {
+                var key = data.category + '|' + data.pts;
+                if (boardData[key]) boardData[key].state = 'used';
+            }
+        });
+
+        socket.on('auto_pick', function(data) {
+            if (data.category && data.pts) {
+                currentCategory = data.category;
+                currentPoints = data.pts;
+            }
+        });
+
+        // Pick expired — player didn't choose, host picks now
+        socket.on('pick_expired', function(data) {
+            currentPicker = null;
+            clearAllTimers();
+            goToBoard(null); // Host sees clickable board
+        });
+
+        // Pause/Resume
+        socket.on('game_paused', function() {
+            clearAllTimers();
+            document.getElementById('pauseBtn').textContent = 'Продолжить';
+            document.getElementById('pauseBtn').onclick = function() { socket.emit('resume_game'); };
+        });
+
+        socket.on('game_resumed', function(data) {
+            document.getElementById('pauseBtn').textContent = 'Пауза';
+            document.getElementById('pauseBtn').onclick = function() { socket.emit('pause_game'); };
+        });
+
+        /* ===================================================
+           PLAYING PHASE (round_start)
+           =================================================== */
+        socket.on('round_start', function(data) {
+            clearAllTimers();
+            currentCategory = data.category || '';
+            currentPoints = data.pts || 0;
+            var music = data.music || {};
+            var playDuration = data.play_duration || 30;
+            var guessDuration = data.guess_duration || 15;
+
+            // Store guess duration for buzzer phase
+            window._guessDuration = guessDuration;
+
+            document.getElementById('playingCategory').textContent = currentCategory;
+            document.getElementById('playingPoints').textContent = currentPoints;
+
+            // Mark cell as used on board
+            var key = currentCategory + '|' + currentPoints;
+            if (boardData[key]) boardData[key].state = 'used';
+
+            showPhase('phasePlaying');
+            document.getElementById('volumeControl').classList.add('visible');
+            document.getElementById('openBuzzerBtn').style.display = '';
+
+            // Start music
+            startMusic(music);
+
+            // Timer
+            var timeLeft = playDuration;
+            var total = playDuration;
+            document.getElementById('playingTimer').textContent = timeLeft;
+            document.getElementById('playingTimer').className = 'timer-display ' + timerTextClass(timeLeft, total);
+            updateTimerBar(timeLeft, total);
+
+            playTimerInterval = setInterval(function() {
+                timeLeft--;
+                if (timeLeft < 0) timeLeft = 0;
+                document.getElementById('playingTimer').textContent = timeLeft;
+                document.getElementById('playingTimer').className = 'timer-display ' + timerTextClass(timeLeft, total);
+                updateTimerBar(timeLeft, total);
+                if (timeLeft <= 0) clearInterval(playTimerInterval);
+            }, 1000);
+        });
+
+        function openBuzzerEarly() {
+            socket.emit('open_buzzer_early');
+            document.getElementById('openBuzzerBtn').style.display = 'none';
+        }
+
+        /* ===================================================
+           BUZZING PHASE
+           =================================================== */
+        socket.on('buzzer_open', function(data) {
+            clearAllTimers();
+            var guessDuration = data.guess_duration || window._guessDuration || 15;
+
+            document.getElementById('buzzingCategory').textContent = currentCategory;
+            document.getElementById('buzzingPoints').textContent = currentPoints;
+
+            showPhase('phaseBuzzing');
+
+            var timeLeft = guessDuration;
+            var total = guessDuration;
+            document.getElementById('buzzingTimer').textContent = timeLeft;
+            document.getElementById('buzzingTimer').className = 'timer-display ' + timerTextClass(timeLeft, total);
+            updateTimerBar(timeLeft, total);
+
+            buzzTimerInterval = setInterval(function() {
+                timeLeft--;
+                if (timeLeft < 0) timeLeft = 0;
+                document.getElementById('buzzingTimer').textContent = timeLeft;
+                document.getElementById('buzzingTimer').className = 'timer-display ' + timerTextClass(timeLeft, total);
+                updateTimerBar(timeLeft, total);
+                if (timeLeft <= 0) clearInterval(buzzTimerInterval);
+            }, 1000);
+        });
+
+        /* ===================================================
+           JUDGING PHASE
+           =================================================== */
+        socket.on('first_buzz', function(data) {
+            clearAllTimers();
+            showPhase('phaseJudging');
+            var name = data.name || data.player || '???';
+            document.getElementById('buzzerWinner').innerHTML = '<strong>' + escHtml(name) + '</strong> нажал первым!';
+        });
+
+        function judge(correct) {
+            socket.emit('judge', { correct: correct });
+        }
+
+        /* ===================================================
+           WRONG ANSWER
+           =================================================== */
+        socket.on('wrong_answer', function(data) {
+            var name = data.name || '???';
+            var penalty = Math.abs(data.points_change || 0);
+
+            // Update scores from server
+            if (data.scores) {
+                data.scores.forEach(function(p) {
+                    if (players[p.name]) {
+                        players[p.name].score = p.score;
+                        players[p.name].connected = p.connected;
+                    }
+                });
+            }
+            renderLeaderboard();
+
+            // Brief flash
+            showPhase('phaseResult');
+            document.getElementById('resultText').className = 'result-text result-negative';
+            document.getElementById('resultText').textContent = escHtml(name) + ' -' + penalty + ' очков';
+            document.getElementById('revealInfo').style.display = 'none';
+
+            // Return to buzzing after a moment
+            setTimeout(function() {
+                showPhase('phaseBuzzing');
+            }, 1500);
+        });
+
+        /* ===================================================
+           ROUND RESULT
+           =================================================== */
+        socket.on('round_result', function(data) {
+            clearAllTimers();
+            destroyMusic();
+            document.getElementById('volumeControl').classList.remove('visible');
+
+            // Update scores
+            if (data.scores) {
+                data.scores.forEach(function(p) {
+                    if (players[p.name]) {
+                        players[p.name].score = p.score;
+                        players[p.name].connected = p.connected;
+                    }
+                });
+            }
+
+            // Update board
+            if (data.board) {
+                boardData = data.board;
+                parseBoard();
+            }
+
+            // Mark played cell as used
+            if (data.category && data.pts) {
+                var key = data.category + '|' + data.pts;
+                if (boardData[key]) boardData[key].state = 'used';
+            }
+
+            showPhase('phaseResult');
+
+            if (data.all_locked || data.no_winner) {
+                document.getElementById('resultText').className = 'result-text result-neutral';
+                document.getElementById('resultText').textContent = 'Никто не угадал';
+            } else if (data.winner || data.name) {
+                var winnerName = data.winner || data.name || '???';
+                var pts = data.pts_awarded || data.pts || currentPoints;
+                document.getElementById('resultText').className = 'result-text result-positive';
+                document.getElementById('resultText').textContent = escHtml(winnerName) + ' +' + pts + ' очков!';
+            }
+
+            // Show reveal info if available
+            var reveal = document.getElementById('revealInfo');
+            if (data.reveal) {
+                reveal.style.display = 'inline-block';
+                document.getElementById('revealTitle').textContent = data.reveal.title || '';
+                document.getElementById('revealArtist').textContent = data.reveal.artist || '';
+            } else {
+                reveal.style.display = 'none';
+            }
+
+            // Transition to board after delay
+            setTimeout(function() {
+                goToBoard(data.picker || null);
+            }, 3500);
+        });
+
+        /* ===================================================
+           TIME UP
+           =================================================== */
+        socket.on('time_up', function(data) {
+            clearAllTimers();
+            destroyMusic();
+
+            // Update board if provided
+            if (data.board) {
+                boardData = data.board;
+                parseBoard();
+            }
+
+            // Update scores if provided
+            if (data.scores) {
+                data.scores.forEach(function(p) {
+                    if (players[p.name]) {
+                        players[p.name].score = p.score;
+                        players[p.name].connected = p.connected;
+                    }
+                });
+            }
+
+            // Show "time's up" then go to board
+            showPhase('phaseResult');
+            document.getElementById('resultText').className = 'result-text result-negative';
+            document.getElementById('resultText').textContent = 'Время вышло!';
+            document.getElementById('revealInfo').style.display = 'none';
+            setTimeout(function() {
+                goToBoard(data.picker || null);
+            }, 2000);
+        });
+
+        /* ===================================================
+           GAME OVER
+           =================================================== */
+        socket.on('game_over', function(data) {
+            clearAllTimers();
+            destroyMusic();
+            document.getElementById('volumeControl').classList.remove('visible');
+            showPhase('phaseGameOver');
+
+            // Update final scores
+            if (data.scores) {
+                data.scores.forEach(function(p) {
+                    if (players[p.name]) {
+                        players[p.name].score = p.score;
+                    }
+                });
+            }
+
+            var sorted = (data.leaderboard || []);
+            if (sorted.length === 0) {
+                sorted = Object.keys(players).map(function(sid) {
+                    return { name: players[sid].name, score: players[sid].score };
+                }).sort(function(a, b) { return b.score - a.score; });
+            }
+
+            // Podium (top 3)
+            var podiumHtml = '';
+            var medals = ['gold', 'silver', 'bronze'];
+            var medalIcons = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
+            for (var i = 0; i < Math.min(3, sorted.length); i++) {
+                podiumHtml += '<div class="podium-place ' + medals[i] + '">' +
+                    '<div class="podium-medal">' + medalIcons[i] + '</div>' +
+                    '<div class="podium-name">' + escHtml(sorted[i].name) + '</div>' +
+                    '<div class="podium-score">' + sorted[i].score + '</div></div>';
+            }
+            document.getElementById('podium').innerHTML = podiumHtml;
+
+            // Full list
+            var listHtml = '';
+            sorted.forEach(function(p, i) {
+                listHtml += '<div class="final-entry">' +
+                    '<span class="final-rank">#' + (i + 1) + '</span>' +
+                    '<span class="final-name">' + escHtml(p.name) + '</span>' +
+                    '<span class="final-score">' + p.score + '</span></div>';
+            });
+            document.getElementById('finalList').innerHTML = listHtml;
+        });
+
+        /* ===================================================
+           HOST DISCONNECTED
+           =================================================== */
+        socket.on('host_disconnected', function() {
+            // This shouldn't happen since we ARE the host, but handle gracefully
+        });
+
+        /* ===================================================
+           MUSIC PLAYER
+           =================================================== */
+        var ytPlayer = null;
+        var scWidget = null;
+        var isPlaying = false;
+        var progressInterval = null;
+        var currentVolume = 80;
+        var isMuted = false;
+
+        function startMusic(music) {
+            destroyMusic();
+            currentMusicType = music.type || null;
+
+            if (music.type === 'youtube' && music.video_id) {
+                document.getElementById('playerBox').style.display = 'flex';
+                loadYouTube(music.video_id, music.start || 0);
+            } else if (music.type === 'soundcloud' && music.sc_url) {
+                document.getElementById('playerBox').style.display = 'flex';
+                loadSoundCloud(music.sc_url, music.start || 0);
+            } else {
+                document.getElementById('playerBox').style.display = 'none';
+            }
+        }
+
+        function destroyMusic() {
+            stopProgressUpdate();
+            isPlaying = false;
+            currentMusicType = null;
+            ytPending = null;
+
+            if (ytPlayer) {
+                try { ytPlayer.stopVideo(); } catch(e) {}
+            }
+            if (scWidget) {
+                try { scWidget.pause(); } catch(e) {}
+                scWidget = null;
+                document.getElementById('sc-widget').src = '';
+            }
+            document.getElementById('playerBox').style.display = 'none';
+            document.getElementById('currentTime').textContent = '0:00';
+            document.getElementById('duration').textContent = '0:00';
+            document.getElementById('progressFill').style.width = '0%';
+        }
+
+        /* YouTube */
+        var ytAPIReady = false;
+        var ytPending = null;
+
+        function loadYouTubeAPI() {
+            if (document.getElementById('yt-api-script')) return;
+            var tag = document.createElement('script');
+            tag.id = 'yt-api-script';
+            tag.src = 'https://www.youtube.com/iframe_api';
+            document.head.appendChild(tag);
+        }
+        loadYouTubeAPI();
+
+        window.onYouTubeIframeAPIReady = function() {
+            ytAPIReady = true;
+            if (ytPending) { ytPending(); ytPending = null; }
+        };
+
+        function loadYouTube(videoId, startSec) {
+            function applyVolumeToYT() {
+                try {
+                    if (isMuted) ytPlayer.mute();
+                    else { ytPlayer.unMute(); ytPlayer.setVolume(currentVolume); }
+                } catch(e) {}
+            }
+
+            // Reuse existing player if possible
+            if (ytPlayer && ytPlayer.loadVideoById) {
+                try {
+                    ytPlayer.loadVideoById({videoId: videoId, startSeconds: startSec || 0});
+                    applyVolumeToYT();
+                    return;
+                } catch(e) {
+                    // Player is broken, recreate
+                    try { ytPlayer.destroy(); } catch(e2) {}
+                    ytPlayer = null;
+                    var container = document.querySelector('.yt-hidden');
+                    if (container) container.innerHTML = '<div id="yt-player"></div>';
+                }
+            }
+
+            function create() {
+                ytPlayer = new YT.Player('yt-player', {
+                    height: '180', width: '320',
+                    videoId: videoId,
+                    playerVars: { autoplay: 1, start: startSec, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, rel: 0 },
+                    events: {
+                        onReady: function(e) { applyVolumeToYT(); e.target.playVideo(); },
+                        onStateChange: function(e) {
+                            isPlaying = (e.data === YT.PlayerState.PLAYING);
+                            updatePlayBtn();
+                            if (isPlaying) startProgressUpdate(ytProgress); else stopProgressUpdate();
+                        }
+                    }
+                });
+            }
+            if (ytAPIReady) create(); else ytPending = create;
+        }
+
+        function ytProgress() {
+            if (!ytPlayer || !ytPlayer.getDuration) return;
+            var cur = ytPlayer.getCurrentTime(), tot = ytPlayer.getDuration();
+            if (tot > 0) {
+                document.getElementById('currentTime').textContent = formatTime(cur);
+                document.getElementById('duration').textContent = formatTime(tot);
+                document.getElementById('progressFill').style.width = (cur / tot * 100) + '%';
+            }
+        }
+
+        /* SoundCloud */
+        var scAPILoaded = false;
+
+        function loadSCAPI(cb) {
+            if (scAPILoaded) { cb(); return; }
+            if (document.getElementById('sc-api-script')) { cb(); return; }
+            var s = document.createElement('script');
+            s.id = 'sc-api-script';
+            s.src = 'https://w.soundcloud.com/player/api.js';
+            s.onload = function() { scAPILoaded = true; cb(); };
+            document.head.appendChild(s);
+        }
+
+        function loadSoundCloud(scUrl, startSec) {
+            var iframe = document.getElementById('sc-widget');
+            iframe.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(scUrl) +
+                '&auto_play=true&show_artwork=false&show_comments=false&show_user=false&show_reposts=false&visual=false';
+
+            loadSCAPI(function() {
+                scWidget = SC.Widget(iframe);
+                scWidget.bind(SC.Widget.Events.READY, function() {
+                    scWidget.setVolume(currentVolume);
+                    if (startSec) scWidget.seekTo(startSec * 1000);
+                    scWidget.play();
+                });
+                scWidget.bind(SC.Widget.Events.PLAY, function() {
+                    isPlaying = true; updatePlayBtn(); startProgressUpdate(scProgress);
+                    try { scWidget.setVolume(isMuted ? 0 : currentVolume); } catch(e) {}
+                });
+                scWidget.bind(SC.Widget.Events.PAUSE, function() { isPlaying = false; updatePlayBtn(); stopProgressUpdate(); });
+                scWidget.bind(SC.Widget.Events.FINISH, function() { isPlaying = false; updatePlayBtn(); stopProgressUpdate(); });
+            });
+        }
+
+        function scProgress() {
+            if (!scWidget) return;
+            scWidget.getPosition(function(pos) {
+                scWidget.getDuration(function(dur) {
+                    if (dur > 0) {
+                        document.getElementById('currentTime').textContent = formatTime(pos / 1000);
+                        document.getElementById('duration').textContent = formatTime(dur / 1000);
+                        document.getElementById('progressFill').style.width = (pos / dur * 100) + '%';
+                    }
+                });
+            });
+        }
+
+        /* Shared player controls */
+        function togglePlay() {
+            if (currentMusicType === 'youtube' && ytPlayer) {
+                isPlaying ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+            } else if (currentMusicType === 'soundcloud' && scWidget) {
+                isPlaying ? scWidget.pause() : scWidget.play();
+            }
+        }
+
+        function seekTo(event) {
+            var bar = document.getElementById('progressBar');
+            var rect = bar.getBoundingClientRect();
+            var pct = (event.clientX - rect.left) / rect.width;
+            if (currentMusicType === 'youtube' && ytPlayer && ytPlayer.getDuration) {
+                ytPlayer.seekTo(pct * ytPlayer.getDuration(), true);
+            } else if (currentMusicType === 'soundcloud' && scWidget) {
+                scWidget.getDuration(function(dur) { scWidget.seekTo(pct * dur); });
+            }
+        }
+
+        function updatePlayBtn() {
+            var btn = document.getElementById('playPauseBtn');
+            if (btn) btn.innerHTML = isPlaying ? '&#9646;&#9646;' : '&#9654;';
+        }
+
+        function startProgressUpdate(fn) { stopProgressUpdate(); progressInterval = setInterval(fn, 500); }
+        function stopProgressUpdate() { if (progressInterval) { clearInterval(progressInterval); progressInterval = null; } }
+
+        /* Volume */
+        function changeVolume(val) {
+            currentVolume = parseInt(val);
+            isMuted = currentVolume === 0;
+            updateVolIcon();
+            applyVolume();
+        }
+
+        function applyVolume() {
+            var vol = isMuted ? 0 : currentVolume;
+            if (ytPlayer) {
+                if (isMuted) { try { ytPlayer.mute(); } catch(e) {} }
+                else { try { ytPlayer.unMute(); ytPlayer.setVolume(vol); } catch(e) {} }
+            }
+            if (scWidget) {
+                try { scWidget.setVolume(vol); } catch(e) {}
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('volSlider').value = isMuted ? 0 : currentVolume;
+            updateVolIcon();
+            applyVolume();
+        }
+
+        function updateVolIcon() {
+            var icon = document.getElementById('volIcon');
+            var v = isMuted ? 0 : currentVolume;
+            if (v === 0) icon.innerHTML = '&#128264;';
+            else if (v < 40) icon.innerHTML = '&#128265;';
+            else icon.innerHTML = '&#128266;';
+        }
+    </script>
+</body>
+</html>
